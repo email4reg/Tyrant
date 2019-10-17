@@ -12,6 +12,7 @@ This repository aims at summing up in the same place all the important notions t
 * GARCH, NGARCH, et al.
 * DCC and Monte-Carlo Simulation.
 * VaR and ES.
+* SR
 
 TODO
 --------------------------
