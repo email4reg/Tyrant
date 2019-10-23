@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <math.h>
 
+#define FIRST_KG 23
+#define NEXT_KG 14
 
 int func1()
 {
@@ -21,13 +23,12 @@ int func1()
 
 int func2()
 {
-    int price;
+    int i,price; // i为重量，price为需要支付的运费
 
     printf("公斤 -- 话费(元):\n");
-    for (int i = 1; i <= 20; i++)
+    for (i = 1, price = FIRST_KG; i <= 20; i++, price += NEXT_KG)
     {
-        price = 23 + 14 * (i - 1);
-        printf("%d -- %d\n", i, price);
+        printf("%3d -- %3d\n", i, price);
     }
 
     return 0;
