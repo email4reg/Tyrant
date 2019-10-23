@@ -1,156 +1,100 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <math.h>
 
+/*为了方便调用，我们为控制左右电机, 
+前进后退的数字引脚进行了宏定义*/
+#define LEFT_MOTO_GO 8
+#define LEFT_MOTO_BACK 9
+#define RIGHT_MOTO_GO 10
+#define RIGHT_MOTO_BACK 11
 
 
 int func1()
 {
-    int count = 0;
-
-    printf("请输入一串英文字符:");
-    
-    while (getchar() != '\n')
-    {
-        count += 1;
-    }
-    printf("你总共输入了%d字符!\n", count);
-
-    return 0;
-}
-
-int func2()
-{
-    int count = 0;
+    float op1,op2;
     char ch;
 
-    printf("请输入一行英文句子:");
-    while ((ch = getchar()) != '\n')
+    printf("请输入一个式子:\n");
+    scanf("%f %c %f",&op1,&ch,&op2);
+
+    switch (ch)
     {
-        if (ch >= 'A' && ch <= 'Z')
-        {
-            count += 1;
-        }
-    }
-    printf("你总共输入了%d个大写字母\n", count);
-
-    return 0;
-}
-
-int func3()
-{
-    char ch;
-
-    printf("请输入一行英文句子:");
-
-    while ((ch = getchar()) != '\n')
-    {
-        if (ch >= 'A' && ch <= 'Z')
-        {
-            ch = ch - 'A' + 'a'; // 大小写转换的方法
-        }
-        else if (ch >= 'a' && ch <= 'z')
-        {
-            ch = ch - 'a' + 'A';
-        }
-        putchar(ch);
-    }
-
-    putchar('\n');
-
-    return 0;
-}
-
-int func4()
-{
-    int ch;
-    int num = 0;
-    
-    printf("请输入待转换待字符串:");
-
-    do
-    {
-        ch = getchar();
-
-        if (ch >= '0' && ch <= '9')
-        {
-            num = 10 * num + (ch - '0');
-        }
-        else
-        {
-            if (num)
+        case '-': printf("结果是:%.2f\n", op1 - op2);break;
+        case '+': printf("结果是:%.2f\n", op1 + op2);break;
+        case '*': printf("结果是:%.2f\n", op1 * op2);break;
+        case '/': 
+            if (op2 == 0)
             {
-                break; // 如果已有数字,则退出循环
-            }
-        }
-        
-    } while (ch != '\n');
-
-    printf("结果是:%d\n",num);
-
-    return 0;
-}
-
-int func5()
-{
-    char ch;
-    long long num = 0;
-    long long temp;
-    int is_overflow = 0;
-
-    const int max_int = pow(2,sizeof(int) * 8) / 2 - 1; // const 防止常量被修改
-    const int min_int = pow(2, sizeof(int) * 8) / 2 * (-1);
-
-    printf("请输入待转换的字符串:");
-
-    do
-    {
-        ch = getchar();
-        if (ch >= '0' && ch <= '9')
-        {
-            temp = 10 * num + (ch - '0');
-            if (temp > max_int || temp < min_int)
-            {
-                is_overflow = 1;
+                printf("很遗憾,除数不能为0\n");
                 break;
             }
-        }
-        else
-        {
-            if (num)
+            else
             {
+                printf("结果是:%.2f\n", op1 / op2);
                 break;
             }
-        }       
-    } while (ch != '\n');
-    
-    if (is_overflow)
-    {
-        printf("数值超出范围,结果未定义!\n");
-    }
-    else
-    {
-        if (!num)
-        {
-            printf('并未找到任何数值!\n');
-        }
-        else
-        {
-            printf("结果是:%d\n",num);
-        }   
+        default: printf("请输入有效式子形式!\n");
     }
     
     return 0;
 }
 
+void loop()
+{
+    char ch; // 用于接受命令
+
+    printf("输入命令:");
+    scanf("%c",&ch);
+
+    switch (ch)
+    {
+        case 'g':
+        {
+            digitalWrite(LEFT_MOTO_GO, HIGH);
+            digitalWrite(LEFT_MOTO_BACK, LOW);
+            digitalWrite(RIGHT_MOTO_GO, HIGH);
+            digitalWrite(RIGHT_MOTO_BACK, LOW);
+            break;
+        }
+        case 'b':
+        {
+            digitalWrite(LEFT_MOTO_BACK,HIGH);
+            digitalWrite(LEFT_MOTO_GO,LOW);
+            digitalWrite(RIGHT_MOTO_BACK, HIGH);
+            digitalWrite(RIGHT_MOTO_GO,LOW);
+            break;
+        }
+        case 'r':
+        {
+            digitalWrite(LEFT_MOTO_GO,HIGH);
+            digitalWrite(LEFT_MOTO_BACK, LOW);
+            digitalWrite(RIGHT_MOTO_BACK, LOW);
+            digitalWrite(RIGHT_MOTO_GO, LOW);
+            break;
+        }
+        case 'l':
+        {
+            digitalWrite(LEFT_MOTO_GO, LOW);
+            digitalWrite(LEFT_MOTO_BACK, LOW);
+            digitalWrite(RIGHT_MOTO_GO, HIGH);
+            digitalWrite(RIGHT_MOTO_BACK, LOW);
+            break;
+        }
+        default:
+        {
+            digitalWrite(LEFT_MOTO_GO, LOW);
+            digitalWrite(LEFT_MOTO_BACK, LOW);
+            digitalWrite(RIGHT_MOTO_GO, LOW);
+            digitalWrite(RIGHT_MOTO_BACK, LOW);
+            break;
+        }
+    }
+    // ...省略部分代码...
+}
 
 int main()
 {
-    // func1();
-    // func2();
-    // func3();
-    // func4();
-    func5();
+    func1();
 
     return 0;
 }

@@ -3,91 +3,143 @@
 #include <math.h>
 
 
+
 int func1()
 {
-    int i,j;
+    int count = 0;
 
-    for (i = 1; i <= 9; i++)
+    printf("请输入一串英文字符:");
+    
+    while (getchar() != '\n')
     {
-        for (j = 1; j <= i; j++)
-        {
-            printf("%d*%d=%-2d  ", i, j, i * j);
-        }
-        putchar('\n');
+        count += 1;
     }
+    printf("你总共输入了%d字符!\n", count);
 
     return 0;
 }
 
 int func2()
 {
-    int price;
+    int count = 0;
+    char ch;
 
-    printf("公斤 -- 话费(元):\n");
-    for (int i = 1; i <= 20; i++)
+    printf("请输入一行英文句子:");
+    while ((ch = getchar()) != '\n')
     {
-        price = 23 + 14 * (i - 1);
-        printf("%d -- %d\n", i, price);
+        if (ch >= 'A' && ch <= 'Z')
+        {
+            count += 1;
+        }
     }
+    printf("你总共输入了%d个大写字母\n", count);
 
     return 0;
 }
 
 int func3()
 {
-    int num = 0;
-    long sum = 0L;
-    int status;
+    char ch;
 
-    do
+    printf("请输入一行英文句子:");
+
+    while ((ch = getchar()) != '\n')
     {
-        printf("请输入合法的数字:");
-        sum += num;
-        status = scanf("%d",&num);  //返回成功接收字符的个数，即1
-    } while (status == 1);
+        if (ch >= 'A' && ch <= 'Z')
+        {
+            ch = ch - 'A' + 'a'; // 大小写转换的方法
+        }
+        else if (ch >= 'a' && ch <= 'z')
+        {
+            ch = ch - 'a' + 'A';
+        }
+        putchar(ch);
+    }
 
-    printf("结果是: %ld\n",sum);
+    putchar('\n');
 
     return 0;
 }
 
 int func4()
 {
-    float num = 0;
-    double sum = 0;
-    int status;
+    int ch;
+    int num = 0;
+    
+    printf("请输入待转换待字符串:");
 
     do
     {
-        printf("请输入合法的数字:");
-        do
-        {
-            sum += num;
-            status = scanf("%f",&num);
-        } while (getchar() != '\n' && status == 1);
-    } while (status == 1);
+        ch = getchar();
 
-    printf("结果是: %.2lf\n", sum);
+        if (ch >= '0' && ch <= '9')
+        {
+            num = 10 * num + (ch - '0');
+        }
+        else
+        {
+            if (num)
+            {
+                break; // 如果已有数字,则退出循环
+            }
+        }
+        
+    } while (ch != '\n');
+
+    printf("结果是:%d\n",num);
 
     return 0;
 }
 
-int func5() // 左上
+int func5()
 {
-    int i, j;
+    char ch;
+    long long num = 0;
+    long long temp;
+    int is_overflow = 0;
 
-    for (i = 1; i <= 9; i++)
+    const int max_int = pow(2,sizeof(int) * 8) / 2 - 1; // const 防止常量被修改
+    const int min_int = pow(2, sizeof(int) * 8) / 2 * (-1);
+
+    printf("请输入待转换的字符串:");
+
+    do
     {
-        for (j = 1; j <= 9; j++)
+        ch = getchar();
+        if (ch >= '0' && ch <= '9')
         {
-            if (i <= j)
+            temp = 10 * num + (ch - '0');
+            if (temp > max_int || temp < min_int)
             {
-                printf("%d*%d=%-2d  ", i, j, i * j);
+                is_overflow = 1;
+                break;
             }
         }
-        putchar('\n');
+        else
+        {
+            if (num)
+            {
+                break;
+            }
+        }       
+    } while (ch != '\n');
+    
+    if (is_overflow)
+    {
+        printf("数值超出范围,结果未定义!\n");
     }
-
+    else
+    {
+        if (!num)
+        {
+            printf('并未找到任何数值!\n');
+        }
+        else
+        {
+            printf("结果是:%d\n",num);
+        }   
+    }
+    
     return 0;
 }
 

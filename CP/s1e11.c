@@ -1,100 +1,92 @@
 #include <stdio.h>
 #include <math.h>
 
-/*为了方便调用，我们为控制左右电机, 
-前进后退的数字引脚进行了宏定义*/
-#define LEFT_MOTO_GO 8
-#define LEFT_MOTO_BACK 9
-#define RIGHT_MOTO_GO 10
-#define RIGHT_MOTO_BACK 11
+#define INT int
+#define BEGIN {
+#define END }
+#define IF if(
+#define FI ;}
+#define THEN ){
+#define ELSE }else{
 
+INT func1()
+BEGIN
+    INT i;
+    printf("请输入您的年龄:");
+    scanf("%d",&i);
 
-int func1()
+    IF i < 18 THEN
+        printf("您未满18周岁,不得使用这个程序!\n");
+    ELSE
+        printf("您已满18周岁,欢迎使用本程序,嘿嘿...\n");
+    FI
+
+    return 0;
+END
+
+int func2()
 {
-    float op1,op2;
-    char ch;
+    char x;
 
-    printf("请输入一个式子:\n");
-    scanf("%f %c %f",&op1,&ch,&op2);
+    printf("请输入一个字符:\n");
+    scanf("%c",&x);
 
-    switch (ch)
+    if (x >= 'A' && x <= 'Z')
     {
-        case '-': printf("结果是:%.2f\n", op1 - op2);break;
-        case '+': printf("结果是:%.2f\n", op1 + op2);break;
-        case '*': printf("结果是:%.2f\n", op1 * op2);break;
-        case '/': 
-            if (op2 == 0)
-            {
-                printf("很遗憾,除数不能为0\n");
-                break;
-            }
-            else
-            {
-                printf("结果是:%.2f\n", op1 / op2);
-                break;
-            }
-        default: printf("请输入有效式子形式!\n");
+        x = x + 32;
     }
+    else if (x >= 'a' && x <= 'z')
+    {
+        x = x -32;
+    }
+    printf("%c\n",x);
     
     return 0;
 }
 
-void loop()
+int func3()
 {
-    char ch; // 用于接受命令
+    float heart_rate;
+    int age,max_heart_rate,bpm; // 年龄、最高心率
 
-    printf("输入命令:");
-    scanf("%c",&ch);
+    printf("请输入年龄:\n");
+    scanf("%d",&age);
 
-    switch (ch)
+    max_heart_rate = 220 - age;
+    bpm = 150;
+
+    playSound(bpm);
+    heart_rate = getHeartRate();
+   
+    if (heart_rate > max_heart_rate)
     {
-        case 'g':
-        {
-            digitalWrite(LEFT_MOTO_GO, HIGH);
-            digitalWrite(LEFT_MOTO_BACK, LOW);
-            digitalWrite(RIGHT_MOTO_GO, HIGH);
-            digitalWrite(RIGHT_MOTO_BACK, LOW);
-            break;
-        }
-        case 'b':
-        {
-            digitalWrite(LEFT_MOTO_BACK,HIGH);
-            digitalWrite(LEFT_MOTO_GO,LOW);
-            digitalWrite(RIGHT_MOTO_BACK, HIGH);
-            digitalWrite(RIGHT_MOTO_GO,LOW);
-            break;
-        }
-        case 'r':
-        {
-            digitalWrite(LEFT_MOTO_GO,HIGH);
-            digitalWrite(LEFT_MOTO_BACK, LOW);
-            digitalWrite(RIGHT_MOTO_BACK, LOW);
-            digitalWrite(RIGHT_MOTO_GO, LOW);
-            break;
-        }
-        case 'l':
-        {
-            digitalWrite(LEFT_MOTO_GO, LOW);
-            digitalWrite(LEFT_MOTO_BACK, LOW);
-            digitalWrite(RIGHT_MOTO_GO, HIGH);
-            digitalWrite(RIGHT_MOTO_BACK, LOW);
-            break;
-        }
-        default:
-        {
-            digitalWrite(LEFT_MOTO_GO, LOW);
-            digitalWrite(LEFT_MOTO_BACK, LOW);
-            digitalWrite(RIGHT_MOTO_GO, LOW);
-            digitalWrite(RIGHT_MOTO_BACK, LOW);
-            break;
-        }
+        printf("请马上停止跑步,否则会有生命危险......\n");
     }
-    // ...省略部分代码...
+    else if (heart_rate > 0.85 * max_heart_rate)
+    {
+        printf("请放慢脚步");
+        bpm -= 20;
+        playSound(bpm);
+    }
+    else if (heart_rate < 0.75 * max_heart_rate)
+    {
+        printf("Come on, 请加快节奏!\n");
+        bpm += 20;
+        playSound(bpm);
+    }
+    else
+    {
+        playSound(bpm);
+    }
+
+    return 0;
 }
 
 int main()
 {
-    func1();
+    // func1();
+    // func2();
+    func3();
 
     return 0;
 }
