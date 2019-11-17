@@ -9,7 +9,6 @@ import math
 from scipy.stats import chi2, t, f, norm
 import tushare as ts # 获取股票信息
 
-# test test test
 from sklearn.linear_model import LogisticRegression, Lasso, Ridge
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error, r2_score
