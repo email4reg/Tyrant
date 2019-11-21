@@ -117,50 +117,6 @@ h = np.array([[0, 1/7, 5/14, 0, 3/14, 2/7],
 r = np.array([[0, 5/16, 5/32, 1/16, 0, 7/32, 5/32, 3/32, 0],
                 [0, 2/7, 1/14, 3/28, 0, 3/14, 1/7, 5/28, 0]])
 
-# 实现PageRank算法
-
-def generate_graph(N, alpha=0.5):  # random > alpha, then here is a edge.
-    G = np.zeros((N, N))
-    for i in range(N):
-        for j in range(N):
-            if i == j:
-                continue
-            if random.random() < alpha:
-                G[i][j] = 1
-    return G
-
-
-G = generate_graph(10)
-
-
-def GtoM(G, N):
-    M = np.zeros((N, N))
-    for i in range(N):
-        D_i = sum(G[i])
-        if D_i == 0:
-            continue
-        for j in range(N):
-            M[j][i] = G[i][j] / D_i  # watch out! M_j_i instead of M_i_j
-    return M
-
-
-M = GtoM(G, 10)
-
-
-# Google
-def PageRank(M, N, T=300, eps=1e-6, beta=0.8):
-    R = np.ones(N) / N
-    teleport = np.ones(N) / N
-    for _ in range(T):
-        R_new = beta * np.dot(M, R) + (1-beta)*teleport
-        if np.linalg.norm(R_new - R) < eps:
-            break
-        R = R_new.copy()
-    return R_new
-
-
-values = PageRank(M, 10, T=2000, beta= 0.8)
-
 
 # Tensor Decomposition
 x = tl.tensor(np.arange(24).reshape(3,4,2).astype(float))
