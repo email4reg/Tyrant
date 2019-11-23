@@ -30,7 +30,7 @@ import tushare as ts
 import rpy2.robjects as robjects
 from rpy2.robjects import r as r
 from rpy2.robjects.packages import importr
-# nrm = importr("NetworkRiskMeasures")
+nrm = importr("NetworkRiskMeasures")
 
 
 # initial setup
@@ -114,6 +114,7 @@ for name,each in grouped_report_date:
 #1       5       13568931.097857257
 
 rscript_A_ij = """
+
     set.seed(123)
 
     data2 <- read.csv('/Users/hehaoran/Desktop/data/bank_specific_date_(2010, 6, 30).csv')
@@ -131,13 +132,12 @@ r(rscript_A_ij)
     # '/Users/hehaoran/Desktop/data/bank_lambda_(2010, 6, 30).xls')
 
 rscript_network_stat = """
+
     library(ggplot2)
     library(ggnetwork)
     library(igraph)
 
-    gmd <- graph_from_adjacency_matrix(md_mat)
-    edge_density(gmd)
-    assortativity_degree(gmd)
+    gmd <- graph_from_adjacency_matrix(md_mat, weighted = T)
 
     d <- igraph::degree(gmd)
     bw <- igraph::betweenness(gmd)
@@ -145,7 +145,7 @@ rscript_network_stat = """
     eigen <- igraph::eigen_centrality(gmd)$vector
     alpha <- igraph::alpha_centrality(gmd, alpha = 0.5)
     
-    return(matrix(d,bw,cn,eigen,alpha))
+    print(matrix(d, bw, cn, eigen, alpha, ncol=5))
 """
 r(rscript_network_stat)
 
