@@ -9,16 +9,20 @@ library(intergraph)
 # clear
 rm(list = ls())
 
-data("sim_data")
-head(sim_data)
+# data("sim_data")
+# head(sim_data)
+data <- read.csv('/Users/hehaoran/Desktop/data/bank_specific_date_(2007, 3, 31).csv')
 
 set.seed(15)
 
-md_mat <- matrix_estimation(
-  sim_data$assets, sim_data$liabilities, method = "md", verbose = FALSE)
 
+# md_mat <- matrix_estimation(
+  # sim_data$assets, sim_data$liabilities, method = "md", verbose = FALSE)
+
+md_mat <- matrix_estimation(
+  data$inter_bank_assets, data$inter_bank_liabilities, method = "md", verbose = FALSE)
 # rownames and colnames for the matrix
-rownames(md_mat) <- colnames(md_mat) <- sim_data$bank
+rownames(md_mat) <- colnames(md_mat) <- data$bank_name
 
 ## converting our network to an igraph object
 gmd <- graph_from_adjacency_matrix(md_mat, weighted = T)
