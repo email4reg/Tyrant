@@ -1,7 +1,7 @@
 [Elements of Financial Risk Management](https://booksite.elsevier.com/9780123744487)
 ==========================
 
-<img src="https://github.com/hehaoran-ori/Tyrant/raw/master/tool/cover_page.png" alt="首页" width=210 height=300 />
+<img src="https://github.com/hehaoran-ori/Tyrant/raw/master/tools/cover_page.png" alt="首页" width=210 height=300 />
 
 Goal
 --------------------------
