@@ -10,6 +10,9 @@
 #       2. Definition of the class FinancialNetwork and its methods
 #       3. Utility funciotns
 
+# pylint: disable = no-member
+# pylint: disable = import-error
+
 ## loading library
 import numpy as np
 import pandas as pd
@@ -17,21 +20,29 @@ import pandas as pd
 # time
 from dateutil.parser import parse
 from datetime import datetime
-
-#
-import googletrans as gg
-import networkx as nx
-import tushare as ts
 # import tensorly as tl
 
+# 
+import googletrans as gg
+import tushare as ts
+import sys
+
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from mpl_toolkits.mplot3d import Axes3D
+
 # R
-# pylint: disable=no-member
+
 # r['install.packages']("NetworkRiskMeasures")
 import rpy2.robjects as robjects
 from rpy2.robjects import r as r
 from rpy2.robjects.packages import importr
 nrm = importr("NetworkRiskMeasures")
 
+# local library
+sys.path.append('/Users/hehaoran/Desktop/Tyrant/pkgs')
+from nonlinear_debtrank import Data, SmartExperimenter
 
 # initial setup
 ts.set_token("4e28d8b91ed71e2c5c3e1d917fd81eeed3b70063265344bb173006e5")
@@ -116,6 +127,7 @@ for name,each in grouped_report_date:
 rscript_A_ij = """
 
     set.seed(123)
+    options(warn=-1)
 
     data2 <- read.csv('/Users/hehaoran/Desktop/data/bank_specific_date_(2010, 6, 30).csv')
     md_mat = matrix_estimation(data2$inter_bank_assets, data2$inter_bank_liabilities, method="md",verbose = F)
@@ -126,11 +138,24 @@ rscript_A_ij = """
 r(rscript_A_ij)
 
 # if the axis=0,1 of a matrix are same,then just .T, else replacement
-# bank_mat_md20100630 = pd.DataFrame(np.array(list(r.md_mat)).reshape(19, 19).T, columns=list(
-    # r['row.names'](r.md_mat)), index=list(r['row.names'](r.md_mat)))
+bank_mat_md20100630 = pd.DataFrame(np.array(list(r.md_mat)).reshape(19, 19).T, columns=list(
+    r['row.names'](r.md_mat)), index=list(r['row.names'](r.md_mat)))
 # bank_mat_md20100630.to_excel(
-    # '/Users/hehaoran/Desktop/data/bank_lambda_(2010, 6, 30).xls')
+#     '/Users/hehaoran/Desktop/data/bank_lambda_(2010, 6, 30).xls')
+bank_count = bank_mat_md20100630.shape[0]
+inner_bank_exposure = []
+for i in range(bank_count):
+    for j in range(bank_count):
+        if i != j:
+            inner_bank_exposure.append((i + 1, j + 1, bank_mat_md20100630.values[i, j]))
+inner_bank_exposure = pd.DataFrame(np.array(inner_bank_exposure), columns=['source', 'target', 'exposure'])
+inner_bank_exposure.set_index('source',inplace=True)
+#inner_bank_exposure.to_excel(
+#    '/Users/hehaoran/Desktop/data/inner_bank_exposure.xls')
 
+
+## 3.1 Finding central, important or systemic nodes on the network
+# TODO: md_mat:directed and the weight(defult = the loan amount)
 rscript_network_stat = """
 
     library(ggplot2)
@@ -144,8 +169,54 @@ rscript_network_stat = """
     cn <- igraph::closeness(gmd)
     eigen <- igraph::eigen_centrality(gmd)$vector
     alpha <- igraph::alpha_centrality(gmd, alpha = 0.5)
-    
-    print(matrix(d, bw, cn, eigen, alpha, ncol=5))
+
+    imps <- impact_susceptibility(exposures = gmd, buffer = data2$equity)
+    impd <- impact_diffusion(exposures = gmd, buffer = data2$equity, weights = data2$total_assets)$total
+
 """
 r(rscript_network_stat)
+
+rscript_contagion = """
+
+    contdr <- contagion(exposures = md_mat, buffer = data2$equity, weights = data2$total_assets, shock = "all", method = "debtrank", verbose = F)
+    contdr_summary <- summary(contdr)
+    debtrank <- contdr_summary$summary_table$additional_stress
+"""
+r(rscript_contagion)
+
+
+network_center = pd.DataFrame([list(r.d), list(r.bw), list(r.cn), list(r.eigen), list(r.alpha), list(r.imps), list(r.impd), list(r.debtrank)], index=[
+                              'degree', 'betweenness', 'closeness', 'eigen_centrality', 'alpha_centrality', 'impact_susceptibility', 'impact_diffusion', 'DebtRank'], columns=r['row.names'](r.md_mat)).T
+# network_center.to_excel('/Users/hehaoran/Desktop/data/network_center.xls')
+
+## 3.2 Finding central, important or systemic nodes on the network(non-Linear DebtRank)
+# data3 = pd.read_csv(
+#     '/Users/hehaoran/Desktop/data/bank_specific_date_(2010, 6, 30).csv')
+
+# da3 = data3[['bank_name', 'total_assets', 'equity','inter_bank_assets', 'inter_bank_liabilities']].copy()
+# da3['bank_id'] = [i for i in range(1, da3.shape[0] + 1)]
+# da3.to_excel('/Users/hehaoran/Desktop/data/bank_specific_data20100630.xls')
+
+# loading bank data
+path_bank_specific_data = '/Users/hehaoran/Desktop/Tyrant/data/bank_specific_data20100630.csv'
+path_A_i_j = '/Users/hehaoran/Desktop/Tyrant/data/inner_bank_exposure.csv'
+bank_data = Data(filein_A_ij=path_A_i_j, filein_bank_specific_data=path_bank_specific_data,
+         checks=False, year='20100630', p='0.05', net='ANY')
+
+# experiment
+seed = 123
+filein_parameterspace = '/Users/hehaoran/Desktop/parameter_space.txt'
+#               print i.e:
+
+#               0.1 0.2 0.3 0.4
+#               0.2 0.3 0.4 0.5
+#               ...
+t_max = 100
+numsamples = bank_data.N()
+baseoutdir = '/Users/hehaoran/Desktop/nldr_se_results'
+se = SmartExperimenter(bank_data, filein_parameterspace, t_max,
+                    numsamples, baseoutdir, seed=seed)
+
+for i in range(se.num_experiments()):
+        se.run_ith_experiment(i)
 
