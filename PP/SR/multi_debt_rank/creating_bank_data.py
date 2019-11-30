@@ -11,7 +11,6 @@
 #       3. Utility funciotns
 
 # pylint: disable = no-member
-# pylint: disable = import-error
 
 ## loading library
 import numpy as np
@@ -41,7 +40,6 @@ from rpy2.robjects.packages import importr
 nrm = importr("NetworkRiskMeasures")
 
 # local library
-sys.path.append('/Users/hehaoran/Desktop/Tyrant/pkgs')
 from nonlinear_debtrank import Data, SmartExperimenter
 
 # initial setup
