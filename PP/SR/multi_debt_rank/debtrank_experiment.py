@@ -10,9 +10,9 @@
 #       2. Definition of the class FinancialNetwork and its methods
 #       3. Utility funciotns
 
-# pylint: disable = no-member
 
-## loading library
+
+## load the library
 import numpy as np
 import pandas as pd
 
@@ -24,15 +24,18 @@ from datetime import datetime
 # 
 import googletrans as gg
 import tushare as ts
-import sys
 
+# system
+import sys
+import os
+
+# plot
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 
 # R
-
 # r['install.packages']("NetworkRiskMeasures")
 import rpy2.robjects as robjects
 from rpy2.robjects import r as r
@@ -43,6 +46,8 @@ nrm = importr("NetworkRiskMeasures")
 from nonlinear_debtrank import Data, SmartExperimenter
 
 # initial setup
+# PATH = os.getcwd()
+
 ts.set_token("4e28d8b91ed71e2c5c3e1d917fd81eeed3b70063265344bb173006e5")
 pro = ts.pro_api()
 
@@ -127,7 +132,7 @@ rscript_A_ij = """
     set.seed(123)
     options(warn=-1)
 
-    data2 <- read.csv('/Users/hehaoran/Desktop/data/bank_specific_date_(2010, 6, 30).csv')
+    data2 <- read.csv('/Users/hehaoran/Desktop/Tyrant/data/bank_specific_data20100630.csv')
     md_mat = matrix_estimation(data2$inter_bank_assets, data2$inter_bank_liabilities, method="md",verbose = F)
     rownames(md_mat) <- colnames(md_mat) <- data2$bank_name
 
@@ -150,7 +155,6 @@ inner_bank_exposure = pd.DataFrame(np.array(inner_bank_exposure), columns=['sour
 inner_bank_exposure.set_index('source',inplace=True)
 #inner_bank_exposure.to_excel(
 #    '/Users/hehaoran/Desktop/data/inner_bank_exposure.xls')
-
 
 ## 3.1 Finding central, important or systemic nodes on the network
 # TODO: md_mat:directed and the weight(defult = the loan amount)
