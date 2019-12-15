@@ -36,6 +36,7 @@ nrm = importr("NetworkRiskMeasures")
 igraph = importr("igraph")
 
 # local library
+import tyrant as tt
 from tyrant import debtrank as dr
 
 def GetFile(fname):
@@ -272,7 +273,7 @@ network_center[0][['degree', 'betweenness','closeness', 'eigenvector centrality'
 
 # loading bank data
 path_bank_specific_data = '/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv'
-bank_data = nldr.Data(filein_bank_specific_data=path_bank_specific_data,checks=False, year='20100630', p='0.05', net='ANY')
+bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,checks=False, year='20100630', p='0.05', net='ANY')
 
 # experiment
 seed = 123
@@ -285,13 +286,13 @@ filein_parameterspace = '/Users/hehaoran/Desktop/parameter_space.txt'
 t_max = 100
 numsamples = bank_data.N()
 baseoutdir = '/Users/hehaoran/Desktop/nldr_se_results'
-se = nldr.SmartExperimenter(bank_data, filein_parameterspace, t_max,
+se = dr.SmartExperimenter(bank_data, filein_parameterspace, t_max,
                     numsamples, baseoutdir, seed=seed)
 
 for i in range(se.num_experiments()):
         se.run_ith_experiment(i)
 
-fn = nldr.Finetwork(bank_data)
+fn = dr.Finetwork(bank_data)
 x = bank_data.getExposures()
 fn.stats()
 fn.draw()
