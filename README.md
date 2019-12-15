@@ -6,7 +6,7 @@
 Goal
 --------------------------
 
-[1]This repository aims at summing up in the same place all the important notions that are covered in Elements of Financial Risk Management course, and include:
+This repository aims at summing up in the same place all the important notions that are covered in Elements of Financial Risk Management course, and include:
 
 * AR, MA model
 * GARCH, NGARCH, et al.
@@ -14,7 +14,7 @@ Goal
 * VaR and ES.
 * SR
 
-[2]Elements of Financial Network, and include:
+Elements of Financial Network, and include:
 
 * DebtRank, Non Linear DebtRank algorithm.
 * draw the finnancial network.
