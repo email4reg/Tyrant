@@ -35,7 +35,7 @@ from rpy2.robjects.packages import importr
 nrm = importr("NetworkRiskMeasures")
 igraph = importr("igraph")
 
-# local library
+# local packages
 import tyrant as tt
 from tyrant import debtrank as dr
 
@@ -45,6 +45,7 @@ def GetFile(fname):
     return df.set_index(['Filein'])
 
 # initial setup
+# pylint: disable = no-member
 PATH = os.getcwd()
 
 ts.set_token("4e28d8b91ed71e2c5c3e1d917fd81eeed3b70063265344bb173006e5")
@@ -151,8 +152,8 @@ print(r(rscript_A_ij))
 # if the axis=0,1 of a matrix are same,then just .T, else replacement
 bank_mat_md20100630 = pd.DataFrame(np.array(list(r.md_mat)).reshape(14, 14).T, columns=list(
     r['row.names'](r.md_mat)), index=list(r['row.names'](r.md_mat)))
-# bank_mat_md20100630.to_csv(
-#     '/Users/hehaoran/Desktop/bank_lambda_(2010, 6, 30).csv')
+bank_mat_md20100630.to_csv(
+    '/Users/hehaoran/Desktop/bank_lambda_(2010, 6, 30).csv')
 
 bank_count = bank_mat_md20100630.shape[0]
 inner_bank_exposure = []
@@ -273,7 +274,8 @@ network_center[0][['degree', 'betweenness','closeness', 'eigenvector centrality'
 
 # loading bank data
 path_bank_specific_data = '/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv'
-bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,checks=False, year='20100630', p='0.05', net='ANY')
+bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,
+                    checks=False, year='2010-06-30', p='0.05', net='Interbank Network')
 
 # experiment
 seed = 123
@@ -293,6 +295,8 @@ for i in range(se.num_experiments()):
         se.run_ith_experiment(i)
 
 fn = dr.Finetwork(bank_data)
-x = bank_data.getExposures()
 fn.stats()
-fn.draw()
+h_i_shock = np.zeros(bank_data.N())
+h_i_shock[1] = 0.02
+h_i_shock[2] = 0.05
+fn.draw(method='dr',h_i_shock=h_i_shock)

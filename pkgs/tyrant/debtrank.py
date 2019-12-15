@@ -219,7 +219,9 @@ class Data:
         self._A_ij = np.zeros((self._N, self._N), dtype=np.double)
 
         r('set.seed(%s)' % r_seed)
+        print('Estimating the exposure matrix....and',end=' ')
         md_mat = nrm.matrix_estimation(FloatVector(self._IB_A_i), FloatVector(self._IB_L_i), method='md', verbose='F')
+        print('Finished!')
         self._df_edges = self._df2exposures(md_mat)
 
         # df_edges = pd.read_csv(filein_A_ij)
@@ -791,13 +793,18 @@ class Finetwork():
         # remove weight=0
         if is_remove:
             self._FN = self._remove_0_weight()
-        
-        # add the weights of nodes
+
+        self._nodes = self._FN.nodes()
+        self._edges = self._FN.edges()
+
+        # add the attribute to nodes(i.e assets)
         for i, j in zip(self._data._bank_name_i, self._data.A_i()):
             self._FN.nodes[i]['assets'] = j
 
         # create a draw paramters
-        self._draw_params()
+        attr_nodes = [self._FN.nodes[node]['assets'] for node in self._FN]
+        attr_edges = [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]
+        self._draw_params(attr_nodes, attr_edges)
         
     def _remove_isolated_banks(self):
         for i in self._Ad_ij.index:
@@ -812,39 +819,84 @@ class Finetwork():
         self._FN.remove_edges_from(weight_0)
         return self._FN
 
-    def _draw_params(self,max_node_size=600,min_node_size=150, max_edge_color=2, min_edge_color=0.5):
-        # the size and colour of nodes
-        max_node = max([self._FN.nodes[node]['assets'] for node in self._FN])
-        min_node = min([self._FN.nodes[node]['assets'] for node in self._FN])
-        self._node_size = list(map(lambda x: min_node_size + ((max_node_size - min_node_size) / (
-            max_node - min_node)) * (x - min_node), [self._FN.nodes[node]['assets'] for node in self._FN]))
+    def _scale(self,x, y_min, y_max):
+        # y_min and y_max are the values you expected
+        x_min = np.min(x)
+        x_max = np.max(x)
+        return list(map(lambda x: y_min + ((y_max - y_min) / (x_max - x_min)) * (x - x_min), x))
 
-        # the width and colour of edges
-        max_edge = max([self._FN.edges[i, j]['weight'] for i, j in self._FN.edges])
-        min_edge = min([self._FN.edges[i, j]['weight'] for i, j in self._FN.edges])
-        self._edge_color = list(map(lambda x: min_edge_color + (max_edge_color - min_edge_color / (
-            max_edge - min_edge)) * (x - min_edge), [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]))
+    def _draw_params(self,attr_nodes,attr_edges):
+        ## the size of nodes
+        self._node_assets = self._scale(attr_nodes, y_min=150, y_max=600)
+        ## the colour of nodes
 
+        ## the width and colour of edges
+        self._edge_weights = self._scale(attr_edges, y_min=0.01, y_max=1)
+    
+    def _run_debtrank(self, h_i_shock, t_max):
+        # run DebtRank algorithm
+        dr = DebtRank(self._data, self._data.A_i())
+        for _ in dr.iterator(h_i_shock=h_i_shock, t_max=t_max):
+            pass
+        # get the values of debtrank of nodes and rank by First-Third quantile
+        self._node_debtrank = dr.h_i()
+        q1, q2, q3 = np.percentile(self._node_debtrank, [25, 50, 75])
+        # create the four kinds of colour of nodes
+        nodes_color = []
+        for i in self._node_debtrank:
+            if i < q1:
+                nodes_color.append('#6495ED')
+            elif i >= q1 and i < q2:
+                nodes_color.append('#EEEE00')
+            elif i >= q2 and i < q3:
+                nodes_color.append('#EE9A00')
+            else:
+                nodes_color.append('#EE0000')
+        return nodes_color
+    
     def nodes(self):
         return list(self._nodes)
     
     def edges(self):
         return list(self._edges)
     
-    def draw(self):
-        draw_params = {'node_size': self._node_size,
-                       'edge_color': self._edge_color,
-                       'edge_cmap': plt.cm.Blues,
-                       'width': 1.5,
-                       'with_labels': True}
-        nx.draw(self._FN, pos=nx.circular_layout(self._FN), **draw_params)
+    def draw(self, font_size=5, width=0.8, node_color='#6495ED', method=None, h_i_shock=None, t_max=100, **draw_params):
+        if method == 'dr':
+            assert isinstance(h_i_shock,(list,np.ndarray)), "ERROR: the parameter 'h_i_shock' cannot be empty, a list or np.array[0,1] should be provided"
+            self._nodes_color = self._run_debtrank(h_i_shock=h_i_shock, t_max=t_max)
+            self._nodes_name = {}
+            for i,j in zip(self._nodes,h_i_shock):
+                assert j >= 0,"ERROR: the value of h_i_shock should in [0,1]"
+                if j == 0.0:
+                    self._nodes_name[i] = i 
+                else:
+                    self._nodes_name[i] = i + r"$\bigstar$"
+        elif method == 'nldr':
+            pass # TODO
+        else:
+            self._nodes_color = node_color
+        
+        draw_default = {'node_size': self._node_assets,
+                        'node_color': self._nodes_color,
+                       'edge_color': self._edge_weights,
+                       'edge_cmap': plt.cm.binary,
+                        'labels': self._nodes_name,
+                        'style': 'solid',
+                        'with_labels' : True
+                        }
+        if not draw_params:
+            draw_params = draw_default
+        plt.rcParams['figure.dpi'] = 160
+        plt.rcParams['savefig.dpi'] = 300
+        plt.title('The ' + self._data._label_net + '(%s)' % self._data._label_year, fontsize = font_size+2)
+        nx.draw(self._FN, pos=nx.circular_layout(self._FN), font_size=font_size, width=width, **draw_params)
         plt.show()
 
     def getFN(self):
         return self._FN
 
     def save(self, path):
-       nx.write_gexf(self, path + ".gexf")
+       nx.write_gexf(self._FN, path + ".gexf")
     
     ## Generate a series of basic stats for the network
     def stats(self):
