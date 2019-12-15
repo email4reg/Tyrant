@@ -1,3 +1,6 @@
+# program:                nonlinear-DebtRank
+# @author:                hehaoran
+options(warn=-1)
 library(Matrix)
 library(NetworkRiskMeasures)
 
@@ -11,16 +14,12 @@ rm(list = ls())
 
 # data("sim_data")
 # head(sim_data)
-data <- read.csv('/Users/hehaoran/Desktop/data/bank_specific_date_(2007, 3, 31).csv')
+data <- read.csv("/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv")
 
 set.seed(15)
 
-
-# md_mat <- matrix_estimation(
-  # sim_data$assets, sim_data$liabilities, method = "md", verbose = FALSE)
-
-md_mat <- matrix_estimation(
-  data$inter_bank_assets, data$inter_bank_liabilities, method = "md", verbose = FALSE)
+# md_mat <- matrix_estimation(sim_data$assets, sim_data$liabilities, method = "md", verbose = FALSE)
+md_mat <- matrix_estimation(rowsum=data$inter_bank_assets, colsums=data$inter_bank_liabilities, method = "md", verbose = FALSE)
 # rownames and colnames for the matrix
 rownames(md_mat) <- colnames(md_mat) <- data$bank_name
 
@@ -52,19 +51,17 @@ assortativity_degree(gmd)
 
 ## Finding central, important or systemic nodes on the network
 sim_data$degree <- igraph::degree(gmd)
-sim_data$btw    <- igraph::betweenness(gmd)
-sim_data$close  <- igraph::closeness(gmd)
-sim_data$eigen  <- igraph::eigen_centrality(gmd)$vector
-sim_data$alpha  <- igraph::alpha_centrality(gmd, alpha = 0.5)
+sim_data$btw <- igraph::betweenness(gmd)
+sim_data$close <- igraph::closeness(gmd)
+sim_data$eigen <- igraph::eigen_centrality(gmd)$vector
+sim_data$alpha <- igraph::alpha_centrality(gmd, alpha = 0.5)
 
 sim_data$imps <- impact_susceptibility(exposures = gmd, buffer = sim_data$buffer)
-sim_data$impd <- impact_diffusion(
-  exposures = gmd, buffer = sim_data$buffer, weights = sim_data$weights)$total
+sim_data$impd <- impact_diffusion(exposures = gmd, buffer = sim_data$buffer, weights = sim_data$weights)$total
 
 ## Contagion metrics: default cascades and DebtRank
 # DebtRank simulation
-contdr <- contagion(exposures = md_mat, buffer = sim_data$buffer, weights = sim_data$weights, 
-                     shock = "all", method = "debtrank", verbose = FALSE)
+contdr <- contagion(exposures = md_mat, buffer = sim_data$buffer, weights = sim_data$weights, shock = "all", method = "debtrank", verbose = FALSE)
 summary(contdr)
 plot(contdr)
 

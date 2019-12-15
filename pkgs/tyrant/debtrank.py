@@ -1,12 +1,30 @@
-# pylint: disable = no-member
-import sys
+# @author:                hehaoran
+# @environment: python 3.7.4
 import numpy as np
 import pandas as pd
+
+# 
+from rpy2.robjects.packages import importr
+from rpy2.robjects import r as r
+from rpy2.robjects import FloatVector
+
+# 
+import sys
 from operator import xor
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" # for the error class <Finetwork.draw>
+
+# figure
+import networkx as nx
+import matplotlib.pyplot as plt
+
 
 # Manipulation of Folders
 import os
 import errno
+
+# pylint: disable = no-member
+
 def make_sure_path_exists(path):
     try:
         os.makedirs(path)
@@ -14,8 +32,127 @@ def make_sure_path_exists(path):
         if exception.errno != errno.EEXIST:
             raise
 
+
+class DebtRank():
+    """
+     @param graph: the graph
+     @param SD: set of nodes for which the measure must be calculated
+     @param h: scalar (double) in [0,1] with the initial level of distress (equal for all nodes). 1 is default
+     @param maxIter: maximum number of iterations
+     @param relevance: dictionnary with absolute economic relevance of each node (could be Makt cap or other)
+    """
+    def __init__(self, data, relevance):
+        assert isinstance(data, Data)
+        self._data = data
+        self._N = self._data.N()
+        self._W_ji = self._data.Lambda_ij()
+        self._relevance = relevance
+
+        self._h_i = np.zeros(self._N, dtype=np.double)
+        self._state = np.zeros(self._N, dtype=np.str)
+    
+    def iterator(self, h_i_shock, t_max, check_stationarity=True):
+#       print h_i_shock
+#       0.1
+#       0.2
+#       ...
+        if check_stationarity:
+            self._stationarity = False
+            self._last_h_i = np.zeros(self._N, dtype=np.double)
+
+        # Check h_i_shock
+        h_i_shock = np.array(h_i_shock, dtype=np.double)
+        assert len(h_i_shock) == self._N
+
+        self._t_max = int(t_max)
+        assert self._t_max >= 0
+
+        # STEP t = 0
+        self._t = 0
+        self._h_i[:] = 0.0  # h_i(t=0)=0
+
+        yield self._t
+
+        # STEP t = 1
+
+        self._t += 1
+        self._h_i[:] = h_i_shock
+        self._state[:] = ['U' if not i else 'D' for i in h_i_shock]
+        yield self._t
+
+        # STEP t = 2,3....
+        while self._t < t_max:
+
+            self._t += 1
+            _D_i = [i[0] for i in np.argwhere(self._state == 'D')]
+
+            # self._h_i += self._W_ji.dot(self._h_i)
+            for i in range(self._N):
+                for j in _D_i:
+                    self._h_i[i] += self._h_i[j] * self._W_ji[j, i]
+            self._h_i = np.minimum(1.0, self._h_i)
+                              
+            # Update the statex
+            for i in range(self._N):
+                if self._state[i] == 'D' or self._state[i] == 'I':
+                    self._state[i] = 'I'
+                else:
+                    if self._h_i[i] > 0 and self._state[i] != 'I':
+                        self._state[i] = 'D'
+                    else:
+                        self._state[i] = 'U'
+            
+            yield self._t
+
+            if check_stationarity:
+                if np.allclose(self._h_i, self._last_h_i):
+                    self._stationarity = True
+                    continue
+                self._last_h_i[:] = self._h_i
+
+    def h_i(self):
+        return self._h_i.copy()
+
+    def mean_h(self):
+        return self._h_i.mean()
+
+    def std_h(self):
+        return self._h_i.std()
+
+    def max_h(self):
+        return self._h_i.max()
+
+    def min_h(self):
+        return self._h_i.min()
+
+    def num_defaulted(self):
+        return (self._h_i >= 1.0).sum()
+
+    def num_active(self):
+        return self._N - self.num_defaulted()
+
+    def num_stressed(self):
+        return ((self._h_i > 0.0) & (self._h_i < 1.0)).sum()
+
+    def state(self):
+        return self._state
+    
+    # cumulative last distress
+    def R_i(self):
+        return self._h_i * self._relevance / self._relevance.sum()
+
+    # cumulative initial distress
+    def R0(self,h_i_shock):
+        return h_i_shock * self._relevance / self._relevance.sum()
+
+    # excluding the initial distress
+    def R(self, h_i_shock):
+        return np.sum(self.R_i() - self.R0(h_i_shock))
+
+
 class Data:
-    """Loads the bank-specific data for the banks. 
+    """
+    Loads the bank-specific data for the banks. 
     In essence, data provides all quantities. 
     like A_i, L_i, A_ij, L_ij, IB_A_i, EX_A_i, Lambda_ij, etc., 
     where IB means Inter-Bank and EX means External. 
@@ -23,7 +160,7 @@ class Data:
     i.e. immediately before the shock which occurs at time t=1.
 
     Parameters
-    -----
+    -----------
     filein_Lambda_ij : <str>
         The file name and path of the file containing the inter-bank assets.
     filein_bank_specific_data : <str>
@@ -43,24 +180,21 @@ class Data:
         defined as the number of reconstructed edges divided by the number of possible edges (N(N − 1)) 
     net: <str>
          1)A label that can be provided or not, about the nature of the data. In this case, the net sample id.
-         TODO
     """
-    def __init__(self,filein_A_ij,filein_bank_specific_data,R_ij=None,checks=True,clipneg=True,year='',p='',net=''):
+
+    def __init__(self, filein_bank_specific_data, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123):
 
         # the network label
         self._label_year=str(year)
         self._label_p=str(p)
         self._label_net=str(net)
         #
-        self._filein_A_ij=str(filein_A_ij)
         self._filein_bank_specific_data=str(filein_bank_specific_data)
 
-#        print '# Loading bank-specific data from',filein_bank_specific_data
-
-#bank_id total_assets    equity  inter_bank_assets       inter_bank_liabilities  bank_name
-#1       2527465000.0    95685000.0      159769000.0     137316000.0     "HSBC Holdings Plc"
-#2       2888526820.49   64294758.6352   96239646.83     260571978.577   "BNP Paribas"
-
+        ## create bank_specific_data
+#       bank_id   total_assets    equity         inter_bank_assets   inter_bank_liabilities  bank_name
+#         1       2527465000.0    95685000.0      159769000.0          137316000.0         "HSBC Holdings Plc"
+#         2       2888526820.49   64294758.6352   96239646.83          260571978.577        "BNP Paribas"
         df_bank_specific_data = pd.read_csv(filein_bank_specific_data)
         self._A_i = df_bank_specific_data['total_assets'].values
         self._E_i = df_bank_specific_data['equity'].values
@@ -76,25 +210,28 @@ class Data:
 
         self._N = len(self._A_i)
 
-#        print '# Loading inter-bank assets from',filein_A_ij
+        ## create inner_bank_exposure via above filein_bank_specific_data
+#       source  target  exposure
+#         1       2       18804300.1765828
+#         1       3       593429.0704464162
+#         1       4       7180905.941936611
+        nrm = importr("NetworkRiskMeasures")
+        self._A_ij = np.zeros((self._N, self._N), dtype=np.double)
 
-#source  target  exposure
-#1       2       18804300.1765828
-#1       3       593429.0704464162
-#1       4       7180905.941936611
-#1       5       13568931.097857257
+        r('set.seed(%s)' % r_seed)
+        md_mat = nrm.matrix_estimation(FloatVector(self._IB_A_i), FloatVector(self._IB_L_i), method='md', verbose='F')
+        self._df_edges = self._df2exposures(md_mat)
 
-        self._A_ij = np.zeros( (self._N,self._N) , dtype=np.double )
-        df_edges = pd.read_csv(filein_A_ij)
-        for _,i,j,w in df_edges.itertuples():
-            ii = i - 1
-            jj = j - 1
+        # df_edges = pd.read_csv(filein_A_ij)
+        for _,i,j,w in self._df_edges[1].itertuples():
+            ii = int(i - 1) # here is a bug, must convert to <int>
+            jj = int(j - 1)
             assert ii >= 0 and ii < self._N
             assert jj >= 0 and jj < self._N
             if clipneg:
                 w=max(0.,w)
             else:
-                assert w > 0.
+                assert w > 0
             self._A_ij[ii,jj] = w
 
 #        print '# Creating R_ij...'
@@ -126,39 +263,20 @@ class Data:
                     tmp = self._A_ij[i,j]*(1.0-self._R_ij[i,j])/self._E_i[i]
 
                 self._Lambda_ij[i,j] = tmp
-               
-#        print '# Running checks...' 
 
         if checks:
-
-            def tol(x,y,rtol=0.05):
-                tot=abs(x)+abs(y)
-                if tot==0.0:
-                    return True
-                rdif=2.0*abs(x-y)/tot
-                if not rdif < rtol:
-                    print("# WARNING")
-                    print("# rdif",rdif)
-                    print("# x",x)
-                    print('# y',y)
-#                   assert False
-
-#            print '# Checking consistenct checks; Network quantities should be equivalent to array quantities...'            
-
-            _np_A_ij = self.A_ij()
-            _np_L_ij = self.L_ij()
-            _np_IB_A_i = self.IB_A_i()
-            _np_IB_L_i = self.IB_L_i()
             for i in range(self._N):
-                tol( _np_IB_A_i[i], _np_A_ij[i,:].sum() )
-                tol( _np_IB_L_i[i], _np_L_ij[i,:].sum() )
+                assert self.IB_A_i()[i] == self.A_ij()[i, :].sum(), "ERROR: the inter_bank_assets should be equal to the sum of lending to others"
+                assert self.IB_L_i()[i] == self.L_ij()[i, :].sum(), "ERROR: the inter_bank_liabilities should be equal to the sum of loaning from others"
 
-#        print '# NLDR has been created...'
-
-    ###
-
+    def _df2exposures(self,r_mat):
+        df = pd.DataFrame(np.array(list(r_mat)).reshape(self._N, self._N).T, columns=self._bank_name_i, index=self._bank_name_i)
+        inner_bank_exposure = [(i + 1, j + 1, df.values[i, j]) for i in range(self._N) for j in range(self._N) if i != j]
+        return df, pd.DataFrame(np.array(inner_bank_exposure), columns=['source', 'target', 'exposure'])
+    
     def label_year(self):
         return self._label_year
+
     def label_p(self):
         return self._label_p
     def label_net(self):
@@ -169,6 +287,12 @@ class Data:
 
     def filein_bank_specific_data(self):
         return self._filein_bank_specific_data
+
+    def getExposures(self,data='wide'):
+        if data == 'wide':
+            return self._df_edges[0].copy()
+        else:
+            return self._df_edges[1].copy()
 
     ###
 
@@ -218,16 +342,17 @@ class Data:
 
 
 class NonLinearDebtRank:
-    """This implements a non-linear DebtRank instance.
+    """
+    This implements a non-linear DebtRank instance.
 
     Parameters
-    ----------
-        data : <Data>
-            The data needed by the non-linear-DebtRank which is necessary to compute different quantities.
-        h_i_shock : <np.array:double>
-            The initial shock to the banks, i.e. h_i(t=1). Notice, it is assumed that h_i(0)=0 for all i (see comment C1 above).
-        alpha : <float>
-            The interpolation parameter; alpha = 0.0 corresponds to linear-DebtRank, and alpha = <big number> to "Furfine".
+    -----------
+    data : Data
+        The data needed by the non-linear-DebtRank which is necessary to compute different quantities.
+    h_i_shock : ndarray of floats
+        The initial shock to the banks, i.e. h_i(t=1). Notice, it is assumed that h_i(0)=0 for all i (see comment C1 above).
+    alpha : float
+        The interpolation parameter; alpha = 0.0 corresponds to linear-DebtRank, and alpha = <big number> to "Furfine".
     """
 
     def __init__(self, data):
@@ -400,7 +525,8 @@ class NonLinearDebtRank:
 
 
 class InitialShockGenerator:
-    """This is a Shock Generator, i.e. a generator for h_i_ini = h_i(1).
+    """
+    This is a Shock Generator, i.e. a generator for h_i_ini = h_i(1).
 
     Parameters
     ----------
@@ -428,12 +554,12 @@ class InitialShockGenerator:
         self._h_shock=None
         self._x_shock=None
         self._N = self._data.N()
-        self._sample_h_i=np.zeros( self._N , dtype=np.double )
-        self._sample_x_i=np.zeros( self._N , dtype=np.double )
+        self._sample_h_i=np.zeros(self._N, dtype=np.double)
+        self._sample_x_i=np.zeros(self._N, dtype=np.double)
 
-        self._EX_A_i_div_E_i=np.zeros( self._N , dtype=np.double )
-        EX_A_i=self._data.EX_A_i()
-        E_i=self._data.E_i()
+        self._EX_A_i_div_E_i = np.zeros(self._N, dtype=np.double)
+        EX_A_i = self._data.EX_A_i()
+        E_i = self._data.E_i()
         for i in range(len(self._EX_A_i_div_E_i)):
             if E_i[i] <= 0.0:
                 self._EX_A_i_div_E_i[i]=0.0
@@ -441,7 +567,7 @@ class InitialShockGenerator:
                 self._EX_A_i_div_E_i[i]=EX_A_i[i]/E_i[i]
             assert self._EX_A_i_div_E_i[i] >= 0.0
 
-        if xor( filein_h_shock is None, filein_x_shock is None ):
+        if xor(filein_h_shock is None, filein_x_shock is None):
             if filein_h_shock is not None:
                 self._loaded_h_i = self._load_vector(filein_h_shock)
             else:
@@ -450,7 +576,7 @@ class InitialShockGenerator:
         else:
             self._p_i_shock=float(p_i_shock)
             assert self._p_i_shock >= 0.0 and self._p_i_shock <= 1.0, 'ERROR: p_i_shock should be in [0,1].'
-            assert xor( h_shock is None, x_shock is None ), 'ERROR: either h_shock, or either x_shock should be provided.'
+            assert xor(h_shock is None, x_shock is None), 'ERROR: either h_shock, or either x_shock should be provided.'
             try:
                 self._h_shock=float(h_shock)
             except:
@@ -470,15 +596,15 @@ class InitialShockGenerator:
                 val = float(line.replace('\n',''))
                 if check:
                     assert v >= 0.0 and v <= 1.0, 'ERROR: the loaded vector entries are out of bound; i.e. not in [0,1].'
-                v.append( val )
+                v.append(val)
         assert len(v) == self._N, 'ERROR: len(loaded_vector) != N'
         return np.array(v,dtype=np.double)
 
     def _x_i_shock_2_h_i_shock(self,x_i_shock):
         assert len(x_i_shock) == self._N
         h_i_shock = x_i_shock * self._EX_A_i_div_E_i #abs( self._data.EX_A_i() / self._data.E_i() )
-        assert len( h_i_shock[  h_i_shock < 0.0 ] ) == 0
-        h_i_shock = np.minimum( 1.0 , h_i_shock )    
+        assert len(h_i_shock[h_i_shock < 0.0]) == 0
+        h_i_shock = np.minimum(1.0, h_i_shock)    
         return h_i_shock
 
     def sample_h_i_shock(self):
@@ -500,7 +626,8 @@ class InitialShockGenerator:
         return self._sample_h_i
 
 class SmartExperimenter:
-    """ Smart Experimenter
+    """ 
+    Smart Experimenter
 
     Parameters
     ----------
@@ -512,6 +639,8 @@ class SmartExperimenter:
         a factor of the devaluation of external assets. See <InitialShockGenerator> in detail
     alpha: <str> or <float>
         the parameter of the non-linear DebtRank algorithm. See <NonLinearDebtRank> in detail
+    num_samples: <int>
+        the number of sample_h_i_shock
     """
 
     def __init__(self,data,filein_parameter_space,t_max,num_samples,baseoutdir,seed=None):
@@ -542,9 +671,6 @@ class SmartExperimenter:
                 assert x_shock > 0.0
                 assert alpha >= 0.0
                 self._parameter_space.append( (rho,p_shock,x_shock,alpha) )
-    
-    # def __iter__(self):
-        # print('TODO')
     
     def rho_ith_experiment(self,i):
         return self._parameter_space[i][0]
@@ -607,33 +733,19 @@ class SmartExperimenter:
 
                 sample_h_i_shock=isg.sample_h_i_shock()
 
-                dynamics=False
-                if dynamics:
-                    print('TODO')
-                    assert False ##'TODO'
-                    #print >>fhw,'# 1.t 2.h_1,h_2,...,h_N'
-                else:
-                    print('# 1.t 2.num_active 3.num_stressed 4.num_defaulted 5.min_h 6.mean_h 7.max_h 8.H',file=fhw)
+                print('# 1.t 2.num_active 3.num_stressed 4.num_defaulted 5.min_h 6.mean_h 7.max_h 8.H',file=fhw)
 
                 # Lets speed up. We do this by checking if we are already in the stationary state.
                 for t in nldr.iterator(sample_h_i_shock, alpha, t_max):
-                    if dynamics:
-                        print('TODO')
-                        assert False # 'TODO'
-                        #print >>fhw,t,
-                        #for h in list(nldr.h_i()):
-                        #    print >>fhw,h,
-                        #print
-                    else:
-                        #print >>,fhw,t, nldr.num_active(), nldr.num_stressed(), nldr.num_defaulted(), nldr.min_h(), nldr.mean_h(), nldr.max_h(), nldr.H()
-                        A=nldr.num_active() 
-                        S=nldr.num_stressed()
-                        D=nldr.num_defaulted()
-                        min_h=nldr.min_h()                 
-                        mean_h=nldr.mean_h()                 
-                        max_h=nldr.max_h()                 
-                        H=nldr.H() 
-                        print(t,A,S,D,min_h,mean_h,max_h,H,file=fhw)
+                    #print >>,fhw,t, nldr.num_active(), nldr.num_stressed(), nldr.num_defaulted(), nldr.min_h(), nldr.mean_h(), nldr.max_h(), nldr.H()
+                    A=nldr.num_active() 
+                    S=nldr.num_stressed()
+                    D=nldr.num_defaulted()
+                    min_h=nldr.min_h()                 
+                    mean_h=nldr.mean_h()                 
+                    max_h=nldr.max_h()                 
+                    H=nldr.H() 
+                    print(t,A,S,D,min_h,mean_h,max_h,H,file=fhw)
 
                 # Now, if we are here is because, either t=t_max, or either because we have reached the stationary point.
                 if nldr.stationarity() is not None:
@@ -644,3 +756,121 @@ class SmartExperimenter:
                 while t < t_max:
                     t+=1
                     print(t,A,S,D,min_h,mean_h,max_h,H,file=fhw)
+
+
+class Finetwork():
+    """
+    Construct a Direct Graph based on the following parameters
+
+    @param Ad_ij: <DataFrame>
+        DataFrame with columns and rowns indexed by node names. Position (i,j) contains the impact of node j over node i
+    @param staticAttributes: 
+        dictionary where the keyas are node identifiers and the values are list containing the values for a list of static attributes
+    @param attributeNames: 
+        list containing the names (as strng) of the various attributes from the dictionary staticAttributes
+    """
+
+    def __init__(self, data, G=None, is_remove=True):
+        assert isinstance(data, Data), "ERROR: data must be a <Data>"
+
+        self._data = data
+        self._Ad_ij = self._data.getExposures() # the interbank exposures
+        assert self._data.N() == len(self._Ad_ij), "ERROR: the length of data is not equal to Ad_ij"
+        
+        # remove isolated banks
+        self._Ad_ij = self._remove_isolated_banks()
+        
+        # create a direct graph
+        self._FN = nx.DiGraph()
+        edges = [(i, j, self._Ad_ij.loc[i,j]) for i in self._Ad_ij.index for j in self._Ad_ij.columns]
+
+        self._FN.add_weighted_edges_from(edges) # add all the weighted node to the grap
+        self._nodes = self._FN.nodes()
+        self._edges = self._FN.edges()
+
+        # remove weight=0
+        if is_remove:
+            self._FN = self._remove_0_weight()
+        
+        # add the weights of nodes
+        for i, j in zip(self._data._bank_name_i, self._data.A_i()):
+            self._FN.nodes[i]['assets'] = j
+
+        # create a draw paramters
+        self._draw_params()
+        
+    def _remove_isolated_banks(self):
+        for i in self._Ad_ij.index:
+            if self._Ad_ij.loc[i, :].sum() == 0.0 and self._Ad_ij.loc[:, i].sum() == 0.0:
+                self._Ad_ij.drop(i, axis=0, inplace=True)
+                self._Ad_ij.drop(i, axis=1, inplace=True)
+                print("Warning: %s was removed!" % i)
+        return self._Ad_ij
+
+    def _remove_0_weight(self):          
+        weight_0 = [(u, v) for (u, v) in self._edges if not self._FN.edges[u, v]['weight']]
+        self._FN.remove_edges_from(weight_0)
+        return self._FN
+
+    def _draw_params(self,max_node_size=600,min_node_size=150, max_edge_color=2, min_edge_color=0.5):
+        # the size and colour of nodes
+        max_node = max([self._FN.nodes[node]['assets'] for node in self._FN])
+        min_node = min([self._FN.nodes[node]['assets'] for node in self._FN])
+        self._node_size = list(map(lambda x: min_node_size + ((max_node_size - min_node_size) / (
+            max_node - min_node)) * (x - min_node), [self._FN.nodes[node]['assets'] for node in self._FN]))
+
+        # the width and colour of edges
+        max_edge = max([self._FN.edges[i, j]['weight'] for i, j in self._FN.edges])
+        min_edge = min([self._FN.edges[i, j]['weight'] for i, j in self._FN.edges])
+        self._edge_color = list(map(lambda x: min_edge_color + (max_edge_color - min_edge_color / (
+            max_edge - min_edge)) * (x - min_edge), [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]))
+
+    def nodes(self):
+        return list(self._nodes)
+    
+    def edges(self):
+        return list(self._edges)
+    
+    def draw(self):
+        draw_params = {'node_size': self._node_size,
+                       'edge_color': self._edge_color,
+                       'edge_cmap': plt.cm.Blues,
+                       'width': 1.5,
+                       'with_labels': True}
+        nx.draw(self._FN, pos=nx.circular_layout(self._FN), **draw_params)
+        plt.show()
+
+    def getFN(self):
+        return self._FN
+
+    def save(self, path):
+       nx.write_gexf(self, path + ".gexf")
+    
+    ## Generate a series of basic stats for the network
+    def stats(self):
+        
+        nNodes, nEdges = self._FN.order(), self._FN.size()
+        avg_deg = float(nEdges) / nNodes
+        
+        # nb os strongly and weakly connected nodes
+        scc = nx.number_strongly_connected_components(self._FN)
+        wcc = nx.number_weakly_connected_components(self._FN)
+        
+        inDegree = self._FN.in_degree()
+        outDegree = self._FN.out_degree()
+        avgInDegree = np.mean(list(zip(*inDegree))[1])
+        avgOutnDegree = np.mean(list(zip(*outDegree))[1])
+        density = nx.density(self._FN)
+
+        stats = {}
+        
+        stats['nbNodes'] = np.round(nNodes, 0)
+        stats['nbEdges'] = np.round(nEdges, 0)
+        stats['avg_deg'] = np.round(avg_deg, 2)
+        stats['stronglyConnectedComponents'] = np.round(scc, 0)
+        stats['weaklyConnectedComponents'] = np.round(wcc, 0)
+        stats['avgInDegree'] = np.round(avgInDegree, 2)
+        stats['avgOutnDegree'] = np.round(avgOutnDegree, 2)
+        stats['density'] = np.round(density, 2)
+        
+        return pd.Series(stats,name='stats')
