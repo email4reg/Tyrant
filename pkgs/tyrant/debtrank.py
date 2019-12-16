@@ -2,6 +2,11 @@
 # @environment: python 3.7.4
 import numpy as np
 import pandas as pd
+import time
+
+#
+from tqdm import tqdm
+from dateutil.parser import parse
 
 # 
 from rpy2.robjects.packages import importr
@@ -17,7 +22,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE" # for the error class <Finetwork.dra
 # figure
 import networkx as nx
 import matplotlib.pyplot as plt
-
+from matplotlib.lines import Line2D
 
 # Manipulation of Folders
 import os
@@ -31,6 +36,41 @@ def make_sure_path_exists(path):
     except OSError as exception:
         if exception.errno != errno.EEXIST:
             raise
+
+
+def creating_initial_shock(n, node_num=None, shock=None):
+    message = ["ERROR:The initial shock should in [0,1]","ERROR:The index of nodes should in [0,n - 1]"]
+
+    h_i_shock = np.zeros(n, dtype=float)
+    nodes_shock = {}
+
+    if isinstance(node_num, int) and isinstance(shock, (int, float)):
+        assert node_num <= n - 1 and node_num >= 0, message[1] 
+        assert shock <= 1 and shock >= 0, message[0]
+        nodes_shock[node_num] = shock
+    elif isinstance(node_num,list) and isinstance(shock,(int,float)):
+        assert shock <= 1 and shock >= 0, message[0]
+        for i in node_num:
+            assert i <= n - 1 and i >= 0, message[1]
+        shock = [shock for _ in range(len(node_num))]
+        nodes_shock = dict(zip(node_num, shock))
+    elif isinstance(node_num, list) and isinstance(shock,list):
+        assert len(node_num) == len(shock), "ERROR: the length of nodes and shocks should be equal"
+        for i in node_num:
+            assert i <= n - 1 and i >= 0, message[1]
+        for j in shock:
+            assert j <= 1 and j >= 0, message[0]
+        nodes_shock = dict(zip(node_num,shock))
+    else:
+        raise Exception("ERROR: node_num and shock should be a int, float or list", TypeError)
+    
+    k = list(nodes_shock.keys())
+    v = list(nodes_shock.values())
+
+    for key, val in zip(k, v):
+        h_i_shock[key] = val
+    
+    return h_i_shock
 
 
 class DebtRank():
@@ -182,14 +222,16 @@ class Data:
          1)A label that can be provided or not, about the nature of the data. In this case, the net sample id.
     """
 
-    def __init__(self, filein_bank_specific_data, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123):
+    def __init__(self, filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123):
 
         # the network label
-        self._label_year=str(year)
+        self._label_year = parse(year).strftime("%Y-%m-%d")
         self._label_p=str(p)
         self._label_net=str(net)
         #
         self._filein_bank_specific_data=str(filein_bank_specific_data)
+        # The initial shock to the banks
+        self.h_i_shock = h_i_shock
 
         ## create bank_specific_data
 #       bank_id   total_assets    equity         inter_bank_assets   inter_bank_liabilities  bank_name
@@ -219,7 +261,7 @@ class Data:
         self._A_ij = np.zeros((self._N, self._N), dtype=np.double)
 
         r('set.seed(%s)' % r_seed)
-        print('Estimating the exposure matrix....and',end=' ')
+        print('Estimating the exposure matrix....')
         md_mat = nrm.matrix_estimation(FloatVector(self._IB_A_i), FloatVector(self._IB_L_i), method='md', verbose='F')
         print('Finished!')
         self._df_edges = self._df2exposures(md_mat)
@@ -237,7 +279,6 @@ class Data:
             self._A_ij[ii,jj] = w
 
 #        print '# Creating R_ij...'
-
         if R_ij is None:
             self._R_ij = np.zeros( (self._N,self._N) , dtype=np.double )
         else:
@@ -290,6 +331,9 @@ class Data:
     def filein_bank_specific_data(self):
         return self._filein_bank_specific_data
 
+    def get_h_i_shock(self):
+        return self.h_i_shock
+    
     def getExposures(self,data='wide'):
         if data == 'wide':
             return self._df_edges[0].copy()
@@ -860,18 +904,35 @@ class Finetwork():
     def edges(self):
         return list(self._edges)
     
-    def draw(self, font_size=5, width=0.8, node_color='#6495ED', method=None, h_i_shock=None, t_max=100, **draw_params):
-        if method == 'dr':
-            assert isinstance(h_i_shock,(list,np.ndarray)), "ERROR: the parameter 'h_i_shock' cannot be empty, a list or np.array[0,1] should be provided"
-            self._nodes_color = self._run_debtrank(h_i_shock=h_i_shock, t_max=t_max)
-            self._nodes_name = {}
-            for i,j in zip(self._nodes,h_i_shock):
+    def draw(self, font_size=5, width=0.8, node_color='#6495ED', method='dr', h_i_shock=None, t_max=100, is_savefig=False, **kwargs):
+
+        if h_i_shock is None:
+            try :
+                self._h_i_shock = self._data.get_h_i_shock()
+            except:
+                print("ERROR: the parameter 'h_i_shock' cannot be empty")
+        else:
+            self._h_i_shock = h_i_shock
+        
+        assert isinstance(self._h_i_shock,(list,np.ndarray)), "ERROR: 'h_i_shock' should be provided(i.e. <list> or <np.ndarray>)"
+
+        method_alias = {'dr':'debtrank','nldr':'nonlinear debtrank'}
+
+        if str(method) in method_alias:
+            # the legend labels of method
+            self.__legend_labels = ['debtrank < 25%', 'debtrank > 25%','debtrank > 50%','debtrank > 75%']
+            # the colors of nodes
+            self._nodes_color = self._run_debtrank(h_i_shock=self._h_i_shock, t_max=t_max)
+            # the labels of nodes
+            self._nodes_label = {}
+            for i, j in zip(self._nodes, self._h_i_shock):
                 assert j >= 0,"ERROR: the value of h_i_shock should in [0,1]"
                 if j == 0.0:
-                    self._nodes_name[i] = i 
+                    self._nodes_label[i] = i 
                 else:
-                    self._nodes_name[i] = i + r"$\bigstar$"
+                    self._nodes_label[i] = i + r"$\bigstar$"
         elif method == 'nldr':
+            self.__legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%','nonlinear debtrank > 50%','nonlinear debtrank > 75%']
             pass # TODO
         else:
             self._nodes_color = node_color
@@ -880,16 +941,29 @@ class Finetwork():
                         'node_color': self._nodes_color,
                        'edge_color': self._edge_weights,
                        'edge_cmap': plt.cm.binary,
-                        'labels': self._nodes_name,
+                        'labels': self._nodes_label,
                         'style': 'solid',
                         'with_labels' : True
                         }
-        if not draw_params:
-            draw_params = draw_default
+        if not kwargs:
+            kwargs = draw_default
         plt.rcParams['figure.dpi'] = 160
-        plt.rcParams['savefig.dpi'] = 300
+        plt.rcParams['savefig.dpi'] = 400
+        legend_elements = [
+                Line2D([0], [0], marker='o', color="#6495ED", markersize=5, label=self.__legend_labels[0]),
+                Line2D([0], [0], marker='o', color="#EEEE00", markersize=5, label=self.__legend_labels[1]), 
+                Line2D([0], [0], marker='o', color="#EE9A00", markersize=5, label=self.__legend_labels[2]),
+                Line2D([0], [0], marker='o', color="#EE0000", markersize=5, label=self.__legend_labels[3]),
+                Line2D([0], [0], marker='*', markerfacecolor="#000000", color='w',markersize=9, label='the shocked bank')
+                ]
         plt.title('The ' + self._data._label_net + '(%s)' % self._data._label_year, fontsize = font_size+2)
-        nx.draw(self._FN, pos=nx.circular_layout(self._FN), font_size=font_size, width=width, **draw_params)
+        nx.draw(self._FN, pos=nx.circular_layout(self._FN), font_size=font_size, width=width, **kwargs)
+        plt.legend(handles=legend_elements, fontsize=font_size, loc='best', frameon=False)
+        if is_savefig:
+            net,date = '',''
+            net = net.join(self._data._label_net.split(' '))
+            date = parse(self._data._label_year).strftime("%Y%m%d")
+            plt.savefig(net + date, format='png', dpi=400)
         plt.show()
 
     def getFN(self):
