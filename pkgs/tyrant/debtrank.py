@@ -38,7 +38,7 @@ def make_sure_path_exists(path):
             raise
 
 
-def creating_initial_shock(n, node_num=None, shock=None):
+def creating_initial_shock(n, node_num, shock):
     message = ["ERROR:The initial shock should in [0,1]","ERROR:The index of nodes should in [0,n - 1]"]
 
     h_i_shock = np.zeros(n, dtype=float)
@@ -808,12 +808,14 @@ class Finetwork():
     """
     Construct a Direct Graph based on the following parameters
 
-    @param Ad_ij: <DataFrame>
-        DataFrame with columns and rowns indexed by node names. Position (i,j) contains the impact of node j over node i
-    @param staticAttributes: 
-        dictionary where the keyas are node identifiers and the values are list containing the values for a list of static attributes
-    @param attributeNames: 
-        list containing the names (as strng) of the various attributes from the dictionary staticAttributes
+    Parameters
+    ----------
+    data: <tyrant.debtrank.Data>
+        Data object, including all required. see tyrant.debtrank.Data.
+    G: <nx.Graph or nx.DiGraph...>
+        see detail in networkx
+    is_remove: <bool> 
+        Remove all edges equal to 0. Default is True.
     """
 
     def __init__(self, data, G=None, is_remove=True):
@@ -850,6 +852,9 @@ class Finetwork():
         attr_edges = [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]
         self._draw_params(attr_nodes, attr_edges)
         
+    def __str__(self):
+        return self._data._label_net + ' on ' + self._data._label_year
+    
     def _remove_isolated_banks(self):
         for i in self._Ad_ij.index:
             if self._Ad_ij.loc[i, :].sum() == 0.0 and self._Ad_ij.loc[:, i].sum() == 0.0:
@@ -877,13 +882,23 @@ class Finetwork():
         ## the width and colour of edges
         self._edge_weights = self._scale(attr_edges, y_min=0.01, y_max=1)
     
-    def _run_debtrank(self, h_i_shock, t_max):
+    def _run_debtrank(self, method, **kwargs):
         # run DebtRank algorithm
-        dr = DebtRank(self._data, self._data.A_i())
-        for _ in dr.iterator(h_i_shock=h_i_shock, t_max=t_max):
-            pass
-        # get the values of debtrank of nodes and rank by First-Third quantile
-        self._node_debtrank = dr.h_i()
+        if method == 'nldr':
+            nldr = NonLinearDebtRank(self._data)
+            for _ in nldr.iterator(h_i_shock=kwargs['h_i_shock'],alpha=kwargs['alpha'], t_max=kwargs['t_max']):
+                pass
+            # get the values of debtrank of nodes and rank by First-Third quantile
+            self._node_debtrank = nldr.h_i()
+        elif method == '':
+            pass # TODO
+        else:
+            dr = DebtRank(self._data, self._data.A_i())
+            for _ in dr.iterator(h_i_shock=kwargs['h_i_shock'],t_max=kwargs['t_max']):
+                pass
+            # get the values of debtrank of nodes and rank by First-Third quantile
+            self._node_debtrank = dr.h_i()
+        
         q1, q2, q3 = np.percentile(self._node_debtrank, [25, 50, 75])
         # create the four kinds of colour of nodes
         nodes_color = []
@@ -904,36 +919,59 @@ class Finetwork():
     def edges(self):
         return list(self._edges)
     
-    def draw(self, font_size=5, width=0.8, node_color='#6495ED', method='dr', h_i_shock=None, t_max=100, is_savefig=False, **kwargs):
-
-        if h_i_shock is None:
+    def draw(self, font_size=5, width=0.8, node_color='#6495ED', method=None, h_i_shock=None, t_max=100, is_savefig=False, **kwargs):
+        title = 'The ' + self._data._label_net + '(%s)' % self._data._label_year        
+        if method is not None and h_i_shock is None:
             try :
                 self._h_i_shock = self._data.get_h_i_shock()
             except:
-                print("ERROR: the parameter 'h_i_shock' cannot be empty")
-        else:
+                try:
+                    self._h_i_shock = kwargs['h_i_shock']
+                except:
+                    raise Exception("ERROR: the parameter 'h_i_shock' cannot be empty", h_i_shock)
+        elif method is not None and h_i_shock is not None:
             self._h_i_shock = h_i_shock
+        elif method is None and h_i_shock is not None:
+            self._h_i_shock = h_i_shock
+            print("Warning: the values of 'h_i_shock' seem useless!")
+        else:
+            self._h_i_shock = np.zeros(self._data._N,dtype=float)
+            print("Warning: the color of nodes have no special significance")
         
         assert isinstance(self._h_i_shock,(list,np.ndarray)), "ERROR: 'h_i_shock' should be provided(i.e. <list> or <np.ndarray>)"
+        assert len(self._h_i_shock) == self._data._N, "ERROR: the length of provided 'h_i_shock' is not equal to data"
 
-        method_alias = {'dr':'debtrank','nldr':'nonlinear debtrank'}
-
-        if str(method) in method_alias:
-            # the legend labels of method
-            self.__legend_labels = ['debtrank < 25%', 'debtrank > 25%','debtrank > 50%','debtrank > 75%']
-            # the colors of nodes
-            self._nodes_color = self._run_debtrank(h_i_shock=self._h_i_shock, t_max=t_max)
+        if method is not None:
             # the labels of nodes
             self._nodes_label = {}
             for i, j in zip(self._nodes, self._h_i_shock):
-                assert j >= 0,"ERROR: the value of h_i_shock should in [0,1]"
+                assert j >= 0, "ERROR: the value of h_i_shock should in [0,1]"
                 if j == 0.0:
-                    self._nodes_label[i] = i 
+                    self._nodes_label[i] = i
                 else:
                     self._nodes_label[i] = i + r"$\bigstar$"
-        elif method == 'nldr':
-            self.__legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%','nonlinear debtrank > 50%','nonlinear debtrank > 75%']
-            pass # TODO
+        else:
+            self._nodes_label = dict(zip(self._nodes, self._nodes))
+        
+        # method_alias = {'dr':'debtrank','nldr':'nonlinear debtrank'}
+
+        if str(method) == 'dr':
+            # the legend labels
+            self._legend_labels = ['debtrank < 25%', 'debtrank > 25%','debtrank > 50%','debtrank > 75%']
+            # the color of nodes
+            self._nodes_color = self._run_debtrank(method = 'dr', h_i_shock=self._h_i_shock, t_max=t_max)
+        
+        elif str(method) == 'nldr':
+            try:
+                alpha = kwargs['alpha']
+            except:
+                raise Exception("the paramater of 'alpha' is essential!",alpha)
+            # rename figure title
+            title = 'The ' + self._data._label_net + ', alpha = %.2f' % alpha + '(%s)' % self._data._label_year 
+            # the legend labels
+            self._legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%','nonlinear debtrank > 50%','nonlinear debtrank > 75%']
+            # the color of nodes
+            self._nodes_color = self._run_debtrank(method='nldr', h_i_shock=self._h_i_shock, alpha=alpha, t_max=t_max)
         else:
             self._nodes_color = node_color
         
@@ -945,26 +983,48 @@ class Finetwork():
                         'style': 'solid',
                         'with_labels' : True
                         }
-        if not kwargs:
-            kwargs = draw_default
+        
+        # customize nx.draw paramater
+        if 'node_size' in kwargs:
+            draw_default['node_size'] = kwargs['node_size']
+        if 'node_color' in kwargs:
+            draw_default['node_color'] = kwargs['node_color']
+        if 'edge_cmap' in kwargs:
+            draw_default['edge_cmap'] = kwargs['edge_cmap']
+        if 'labels' in kwargs:
+            draw_default['labels'] = kwargs['labels']
+        if 'style' in kwargs:
+            draw_default['style'] = kwargs['style']
+        if 'with_labels' in kwargs:
+            draw_default['with_labels'] = kwargs['with_labels']
+
+        draw_kwargs = draw_default
+
         plt.rcParams['figure.dpi'] = 160
         plt.rcParams['savefig.dpi'] = 400
-        legend_elements = [
-                Line2D([0], [0], marker='o', color="#6495ED", markersize=5, label=self.__legend_labels[0]),
-                Line2D([0], [0], marker='o', color="#EEEE00", markersize=5, label=self.__legend_labels[1]), 
-                Line2D([0], [0], marker='o', color="#EE9A00", markersize=5, label=self.__legend_labels[2]),
-                Line2D([0], [0], marker='o', color="#EE0000", markersize=5, label=self.__legend_labels[3]),
-                Line2D([0], [0], marker='*', markerfacecolor="#000000", color='w',markersize=9, label='the shocked bank')
-                ]
-        plt.title('The ' + self._data._label_net + '(%s)' % self._data._label_year, fontsize = font_size+2)
-        nx.draw(self._FN, pos=nx.circular_layout(self._FN), font_size=font_size, width=width, **kwargs)
-        plt.legend(handles=legend_elements, fontsize=font_size, loc='best', frameon=False)
+        if method is None:
+            legend_elements = [Line2D([0], [0], marker='*', markerfacecolor="#000000", color='w',markersize=6, label='the initial shock')]
+            ncol = None
+        else:
+            legend_elements = [
+                    Line2D([0], [0], marker='o', color="#6495ED", markersize=4, label=self._legend_labels[0]),
+                    Line2D([0], [0], marker='o', color="#EEEE00", markersize=4, label=self._legend_labels[1]), 
+                    Line2D([0], [0], marker='o', color="#EE9A00", markersize=4, label=self._legend_labels[2]),
+                    Line2D([0], [0], marker='o', color="#EE0000", markersize=4, label=self._legend_labels[3]),
+                    Line2D([0], [0], marker='*', markerfacecolor="#000000", color='w',markersize=6, label='the initial shock')
+                    ]
+            ncol = 5
+        plt.title(title, fontsize = font_size + 2)
+        nx.draw(self._FN, pos=nx.circular_layout(self._FN), font_size=font_size, width=width, **draw_kwargs)
+        plt.legend(handles=legend_elements, ncol=ncol, fontsize=font_size - 1, loc='lower center', frameon=False)
         if is_savefig:
             net,date = '',''
             net = net.join(self._data._label_net.split(' '))
             date = parse(self._data._label_year).strftime("%Y%m%d")
-            plt.savefig(net + date, format='png', dpi=400)
-        plt.show()
+            plt.savefig(net + date + '.png', format='png', dpi=400)
+            print("save to '%s'" % os.getcwd() + ' and named as %s' % (net + date) + '.png')
+        else:
+            plt.show()
 
     def getFN(self):
         return self._FN
