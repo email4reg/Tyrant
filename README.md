@@ -1,7 +1,7 @@
 [Elements of Financial Risk Management](https://booksite.elsevier.com/9780123744487)
 ==========================
 
-<!-- markdownlint-disable MD033 -->
+<!-- markdownlint-disable MD033 MD026-->
 <img src="https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/tools/t-virus.jpg" alt="首页" width=210 height=300 />
 
 Goal
@@ -22,7 +22,7 @@ Elements of Financial Network, and include:
 TODO
 --------------------------
 
-Why called tyrant
+Why called tyrant?
 --------------------------
 
 *TYRANT-Virus* is a kind of biochemical virus in Capcom's famous horror game *Resident Evil*. The contagion of financial network is like a virus.

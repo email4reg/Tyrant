@@ -28,21 +28,23 @@ bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,
 ***tyrant.debtrank.Finetwork***:
 tyrant.debtrank.Finetwork(data, G=None, is_remove=True)
 > &emsp;Return a financial network.  
-&emsp;**Paramaters**:&emsp;**data**: *Data* object, including all required. see tyrant.debtrank.Data.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**is_remove**: Remove all edges equal to 0. Default is True.
+&emsp;**Paramaters**:  
+&emsp;**data**:*Data* object, including all required. see tyrant.debtrank.Data.  
+&emsp;**is_remove**: Remove all edges equal to 0. Default is True.
 
 ***tyrant.debtrank.Finetwork.draw***:
 tyrant.debtrank.Finetwork.draw(font_size=5, width=0.8, node_color='#6495ED', method='dr', h_i_shock=None, t_max=100, is_savefig=False, **kwargs)
 > &emsp;Return a figure.  
-&emsp;**Paramaters**:&emsp;**font_size**: the size of the labels of nodes. Default is 5.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**method**: optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**is_savefig**: optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**width**: Line width. Default is 0.8.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**node_color**: the color of nodes. if *method* is not empty, the colors reflect the importance level.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**h_i_shock**: the initial shock. see dr.creating_initial_shock().
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;**t_max**: the max number of iteration. Default is 100.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;****kwargs**: customization, see detail in *networkx.draw*.
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;...
+&emsp;**Paramaters**:  
+&emsp;**font_size**: the size of the labels of nodes. Default is 5.  
+&emsp;**method**: optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}.  
+&emsp;**is_savefig**: optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.  
+&emsp;**width**: Line width. Default is 0.8.  
+&emsp;**node_color**: the color of nodes. if *method* is not empty, the colors reflect the importance level.  
+&emsp;**h_i_shock**: the initial shock. see dr.creating_initial_shock().  
+&emsp;**t_max**: the max number of iteration. Default is 100.  
+&emsp;****kwargs**: customization, see detail in *networkx.draw*.  
+&emsp;...
 
 ```python
 fn = dr.Finetwork(bank_data)
