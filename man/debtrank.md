@@ -41,7 +41,7 @@ tyrant.debtrank.Finetwork.draw(font_size=5, width=0.8, node_color='#6495ED', met
 
 &emsp;***Paramaters***:  
 &emsp;&emsp;*font_size*: the size of the labels of nodes. Default is 5.  
-&emsp;&emsp;*method*: optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}.  
+&emsp;&emsp;*method*: optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}. Default is 'dr'.  
 &emsp;&emsp;*is_savefig*: optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.  
 &emsp;&emsp;*width*: Line width. Default is 0.8.  
 &emsp;&emsp;*node_color*: the color of nodes. if *method* is not empty, the colors reflect the importance level.  
@@ -57,4 +57,4 @@ fn.draw(method='dr',is_savefig=True)
 fn.draw(method='dr',h_i_shock=h_i_shock)
 ```
 
-![markdown](https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/tools/InterbankNetwork20100630.png)
+![markdown](https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/libs/InterbankNetwork20100630.png)

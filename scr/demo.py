@@ -60,3 +60,6 @@ plt.legend(["unimportant(<25%)", "general(>25%)", "important(>50%)",
             "very important(>75%)"], ncol=4, handles=legend_elements, fontsize=7, loc='bottom', frameon=False)
 nx.draw(DG, pos=nx.circular_layout(DG), labels=labels,node_color=['g','b','y','y','r','b','r'],edge_color=edge_color, width=2, edge_cmap=plt.cm.Greys, with_labels=True)
 plt.show()
+
+x = "very important"
+x.split()

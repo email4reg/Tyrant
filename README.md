@@ -2,7 +2,7 @@
 ==========================
 
 <!-- markdownlint-disable MD033 MD026-->
-<img src="https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/tools/t-virus.jpg" alt="首页" width=210 height=300 />
+<img src="https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/docs/t-virus.jpg" alt="首页" width=210 height=300 />
 
 Goal
 --------------------------
