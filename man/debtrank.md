@@ -1,16 +1,41 @@
-<!-- markdownlint-disable MD033 -->
+<!-- markdownlint-disable MD033 MD026-->
 # Example usage
 
-## How to draw a financial network
+## How to draw a financial network?
 
-* Loads the package
+* Loads the package.
 
 ```python
 import tyrant as tt
 from tyrant import debtrank as dr
 ```
 
-* load the financial data
+* load the financial data. the `bank_specific_data` see detail in `/libs/data`.  
+
+**`tyrant.debtrank.Data`**:  
+tyrant.debtrank.Data(filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123)  
+
+* **Return**: class Data.
+
+* **Paramaters**:  
+`filein_bank_specific_data`: str  
+&emsp;&emsp;The file path containing the bank-specific data about banks.  
+`h_i_shock`: None, array-like  
+&emsp;&emsp;optional, the initial shock. see dr.creating_initial_shock().  
+`R_ij`: None, float, array-like  
+&emsp;&emsp;optional, defines how much the value of the asset A_ij(0) worths after bank j defaulted. R_ij := rho*A_ij(0), rho in [0,1].  
+`checks`: True  
+&emsp;&emsp;If True, a battery of checks is being run during object initialization.  
+`clipneg`: True  
+&emsp;&emsp;If True, negative values are set to zero.  
+`year`: None, str  
+&emsp;&emsp;optional, A label that can be provided or not, about the nature of the data. In this case, the year.  
+`p`: None, float  
+&emsp;&emsp;optional, the size of network connectivity. Useless for models.  
+`net`: None, str  
+&emsp;&emsp;optional, A label that can be provided or not, about the nature of the data. In this case, the net sample id.  
+`r_seed`: int  
+&emsp;&emsp;the random seed of *R*. for the function of matrix_estimation of library of 'NetworkRiskMeasures'. Default = 123.  
 
 ```python
 path_bank_specific_data = '/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv'
@@ -23,38 +48,49 @@ bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,
                     net='Interbank Network')
 ```
 
-* the 'draw' method from class Finetwork can easy to draw a financial network
+* the 'draw' method from class Finetwork can easy to draw a financial network.
 
-***tyrant.debtrank.Finetwork***:  
+**`tyrant.debtrank.Finetwork`**:  
 tyrant.debtrank.Finetwork(data, G=None, is_remove=True)
 
-&emsp;***Return***: class.
+* **Return**: class Data.
 
-&emsp;***Paramaters***:  
-&emsp;&emsp;*data*: *Data* object, including all required. see tyrant.debtrank.Data.  
-&emsp;&emsp;*is_remove*: Remove all edges equal to 0. Default is True.
+* **Paramaters**:  
+`data`:  
+&emsp;&emsp;*Data* object, including all required. see tyrant.debtrank.Data.  
+`is_remove`:  
+&emsp;&emsp;Remove all edges equal to 0. Default = True.
 
-***tyrant.debtrank.Finetwork.draw***:  
-tyrant.debtrank.Finetwork.draw(font_size=5, width=0.8, node_color='#6495ED', method='dr', h_i_shock=None, t_max=100, is_savefig=False, **kwargs)
+**`tyrant.debtrank.Finetwork.draw`**:  
+tyrant.debtrank.Finetwork.draw(method=None, h_i_shock=None, t_max=100, is_savefig=False, font_size=5, node_color='#6495ED', **kwargs)
 
-&emsp;***Return***: a figure.
+* **Return**: a figure.
 
-&emsp;***Paramaters***:  
-&emsp;&emsp;*font_size*: the size of the labels of nodes. Default is 5.  
-&emsp;&emsp;*method*: optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}. Default is 'dr'.  
-&emsp;&emsp;*is_savefig*: optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.  
-&emsp;&emsp;*width*: Line width. Default is 0.8.  
-&emsp;&emsp;*node_color*: the color of nodes. if *method* is not empty, the colors reflect the importance level.  
-&emsp;&emsp;*h_i_shock*: the initial shock. see dr.creating_initial_shock().  
-&emsp;&emsp;*t_max*: the max number of iteration. Default is 100.  
-&emsp;&emsp;***kwargs*: customization, see detail in *networkx.draw*.  
-&emsp;&emsp;...
+* **Paramaters**:  
+`method`:  
+&emsp;&emsp;optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}. Default = 'dr'.  
+`h_i_shock`:  
+&emsp;&emsp;the initial shock. see dr.creating_initial_shock().  
+`alpha`:  
+&emsp;&emsp;optional, the parameter of Non-Linear DebtRank. Default = 0.  
+`t_max`:  
+&emsp;&emsp;the max number of iteration. Default = 100.  
+`is_savefig`:  
+&emsp;&emsp;optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.  
+`font_size`:  
+&emsp;&emsp;the size of the labels of nodes. Default = 5.  
+`node_color`:  
+&emsp;&emsp;the color of nodes. if *method* is not empty, the colors reflect the importance level.  
+`**kwargs`:  
+&emsp;&emsp;customize your figure, see detail in *networkx.draw*.  
+<!-- &emsp;&emsp;... -->
 
 ```python
 fn = dr.Finetwork(bank_data)
 fn.draw(method='dr',is_savefig=True)
-# Or customize the h_i_shock<np.ndarry>. like:
+# Or customize the h_i_shock, like:
+h_i_shock = dr.creating_initial_shock(bank_data.N(),[1,2],0.05)
 fn.draw(method='dr',h_i_shock=h_i_shock)
 ```
 
-![markdown](https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/libs/InterbankNetwork20100630.png)
+![markdown](https://raw.githubusercontent.com/hehaoran-ori/Tyrant/master/docs/InterbankNetwork20100630.png)
