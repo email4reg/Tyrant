@@ -553,4 +553,22 @@ class SmartExperimenter:
 
 
 if __name__ == "__main__":
-    pass
+    import os
+    import tyrant as tt
+    from tyrant.debtrank import DebtRank, NonLinearDebtRank
+    
+    PATH = os.getcwd()
+
+    # load bank data,like:
+    path_bank_specific_data = PATH + '/bank_specific_data(2010, 6, 30).csv'
+    data = Data(path_bank_specific_data)
+    # debtrank or nonlinear debtrank
+    h_i_shock = tt.creating_initial_shock(data.N(),[1,2],0.05)
+    dr = DebtRank(data)
+    # iteration,if t_max = 100.
+    for _ in dr.iterator(h_i_shock,t_max=100):
+        pass
+    # result
+    h = dr.h_i()
+    dr.num_active()
+    dr.num_defaulted()

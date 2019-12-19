@@ -7,13 +7,12 @@
 
 ```python
 import tyrant as tt
-from tyrant import debtrank as dr
 ```
 
-* load the financial data. the `bank_specific_data` see detail in `/libs/data`.  
+* load the financial data`bank_specific_data`. see detail in `/libs/data`.  
 
-**`tyrant.debtrank.Data`**:  
-tyrant.debtrank.Data(filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123)  
+**`tyrant.network.Data`**:  
+tyrant.network.Data(filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123)  
 
 * **Return**: class Data.
 
@@ -21,7 +20,7 @@ tyrant.debtrank.Data(filein_bank_specific_data, h_i_shock=None, R_ij=None, check
 `filein_bank_specific_data`: str  
 &emsp;&emsp;The file path containing the bank-specific data about banks.  
 `h_i_shock`: None, array-like  
-&emsp;&emsp;optional, the initial shock. see dr.creating_initial_shock().  
+&emsp;&emsp;optional, the initial shock. see tt.creating_initial_shock().  
 `R_ij`: None, float, array-like  
 &emsp;&emsp;optional, defines how much the value of the asset A_ij(0) worths after bank j defaulted. R_ij := rho*A_ij(0), rho in [0,1].  
 `checks`: True  
@@ -39,8 +38,8 @@ tyrant.debtrank.Data(filein_bank_specific_data, h_i_shock=None, R_ij=None, check
 
 ```python
 path_bank_specific_data = '/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv'
-h_i_shock = dr.creating_initial_shock(14,[1,2],0.05)
-bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,
+h_i_shock = tt.creating_initial_shock(14,[1,2],0.05)
+bank_data = tt.Data(filein_bank_specific_data=path_bank_specific_data,
                     h_i_shock=h_i_shock,
                     checks=False,
                     year='2010-06-30',
@@ -48,35 +47,35 @@ bank_data = dr.Data(filein_bank_specific_data=path_bank_specific_data,
                     net='Interbank Network')
 ```
 
-* the 'draw' method from class Finetwork can easy to draw a financial network.
+* draw a financial network.
 
-**`tyrant.debtrank.Finetwork`**:  
-tyrant.debtrank.Finetwork(data, G=None, is_remove=True)
+**`tyrant.drawing.Finetwork`**:  
+tyrant.drawing.Finetwork(data, G=None, is_remove=True)
 
 * **Return**: class Data.
 
 * **Paramaters**:  
 `data`:  
-&emsp;&emsp;*Data* object, including all required. see tyrant.debtrank.Data.  
+&emsp;&emsp;*Data* object, including all required. see tyrant.network.Data.  
 `is_remove`:  
 &emsp;&emsp;Remove all edges equal to 0. Default = True.
 
-**`tyrant.debtrank.Finetwork.draw`**:  
-tyrant.debtrank.Finetwork.draw(method=None, h_i_shock=None, t_max=100, is_savefig=False, font_size=5, node_color='#6495ED', **kwargs)
+**`tyrant.drawing.Finetwork.draw`**:  
+tyrant.drawing.Finetwork.draw(method='', h_i_shock=None, alpha=None, t_max=100, is_savefig=False, font_size=5, node_color='b', **kwargs)
 
 * **Return**: a figure.
 
 * **Paramaters**:  
 `method`:  
-&emsp;&emsp;optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr'}. Default = 'dr'.  
+&emsp;&emsp;optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr','dc',...}. Default = 'dr'.  
 `h_i_shock`:  
-&emsp;&emsp;the initial shock. see dr.creating_initial_shock().  
+&emsp;&emsp;the initial shock. see tt.creating_initial_shock().  
 `alpha`:  
 &emsp;&emsp;optional, the parameter of Non-Linear DebtRank. Default = 0.  
 `t_max`:  
 &emsp;&emsp;the max number of iteration. Default = 100.  
 `is_savefig`:  
-&emsp;&emsp;optional, if True, it will be saved to the current work environment. otherwise *plt.show()*.  
+&emsp;&emsp;optional, if True, it will be saved to the current work environment. otherwise, *plt.show()*.  
 `font_size`:  
 &emsp;&emsp;the size of the labels of nodes. Default = 5.  
 `node_color`:  
@@ -86,10 +85,10 @@ tyrant.debtrank.Finetwork.draw(method=None, h_i_shock=None, t_max=100, is_savefi
 <!-- &emsp;&emsp;... -->
 
 ```python
-fn = dr.Finetwork(bank_data)
+fn = tt.Finetwork(bank_data)
 fn.draw(method='dr',is_savefig=True)
 # Or customize the h_i_shock, like:
-h_i_shock = dr.creating_initial_shock(bank_data.N(),[1,2],0.05)
+h_i_shock = tt.creating_initial_shock(bank_data.N(),[1,2],0.05)
 fn.draw(method='dr',h_i_shock=h_i_shock)
 ```
 

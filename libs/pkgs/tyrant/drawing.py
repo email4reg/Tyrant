@@ -16,23 +16,28 @@ from matplotlib.lines import Line2D
 
 ##
 from tyrant import Data
-from tyrant.debtrank import DebtRank,NonLinearDebtRank
+from tyrant.debtrank import DebtRank, NonLinearDebtRank
 
 
 class Finetwork():
     """
     Construct a Direct Graph based on the following parameters
 
-    Parameters
-    ----------
-    data: <tyrant.debtrank.Data>
-        Data object, including all required. see tyrant.debtrank.Data.
-    G: <nx.Graph> or <nx.DiGraph>...
+    Parameters:
+    ---
+    `data`: tyrant.debtrank.Data
+        All data required. see detail in tyrant.network.Data.
+    ---
+    `G`: nx.Graph or nx.DiGraph
         see detail in networkx
-    is_remove: <bool> 
+    ---   
+    `is_remove`: bool
         Remove all edges equal to 0. Default is True.
+    ---
+    Return:
+    ---
+        network
     """
-
     def __init__(self, data, G=None, is_remove=True):
         assert isinstance(data, Data), "ERROR: data must be a <Data>"
 
@@ -105,7 +110,13 @@ class Finetwork():
     def _run_centrality(self, **kwargs):
         # compute centrality
         # run DebtRank algorithm
-        if kwargs['method'] == 'nldr':
+        if kwargs['method'] == 'dr':
+            dr = DebtRank(self._data, self._data.A_i())
+            for _ in dr.iterator(h_i_shock=kwargs['h_i_shock'],t_max=kwargs['t_max']):
+                pass
+            # get the values of debtrank of nodes and rank by First-Third quantile
+            self._node_centrality = dr.h_i()
+        elif kwargs['method'] == 'nldr':
             nldr = NonLinearDebtRank(self._data)
             for _ in nldr.iterator(h_i_shock=kwargs['h_i_shock'],alpha=kwargs['alpha'], t_max=kwargs['t_max']):
                 pass
@@ -113,12 +124,14 @@ class Finetwork():
             self._node_centrality = nldr.h_i()
         elif kwargs['method'] == 'dc':
             self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
+        elif kwargs['method'] == 'bc':
+            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
+        elif kwargs['method'] == 'cc':
+            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
+        elif kwargs['method'] == 'kc':
+            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
         else:
-            dr = DebtRank(self._data, self._data.A_i())
-            for _ in dr.iterator(h_i_shock=kwargs['h_i_shock'],t_max=kwargs['t_max']):
-                pass
-            # get the values of debtrank of nodes and rank by First-Third quantile
-            self._node_centrality = dr.h_i()
+            pass
         
         q1, q2, q3 = np.percentile(self._node_centrality, [25, 50, 75])
         # create the four kinds of colour of nodes
@@ -213,7 +226,33 @@ class Finetwork():
                 # the color of nodes
                 self._degree_centrality = ct.degree_centrality(self._FN)
                 self._nodes_color = self._run_centrality(method='dc', centrality=self._degree_centrality)
-            
+            elif method == 'bc':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['betweenness centrality < 25%', 'betweenness centrality > 25%',
+                                       'betweenness centrality > 50%', 'betweenness centrality > 75%']
+                # the color of nodes
+                self._betweenness_centrality = ct.betweenness_centrality(self._FN, k=kwargs['k'])
+                self._nodes_color = self._run_centrality(method='bc', centrality=self._betweenness_centrality)
+            elif method == 'cc':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['closeness centrality < 25%', 'closeness centrality > 25%',
+                                       'closeness centrality > 50%', 'closeness centrality > 75%']
+                # the color of nodes
+                self._closeness_centrality = ct.closeness_centrality(self._FN, u=kwargs['u'])
+                self._nodes_color = self._run_centrality(method='cc', centrality=self._closeness_centrality)
+            elif method == 'kc':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['closeness centrality < 25%', 'closeness centrality > 25%',
+                                       'closeness centrality > 50%', 'closeness centrality > 75%']
+                # the color of nodes
+                self._katz_centrality = ct.katz_centrality(self._FN, alpha=kwargs['u'])
+                self._nodes_color = self._run_centrality(method='kc', centrality=self._katz_centrality)
+            else:
+                pass # TODO
+
             _legend_elements = [
             Line2D([0], [0], marker='o', color="#6495ED", markersize=3.5, label=self._legend_labels[0]),
             Line2D([0], [0], marker='o', color="#EEEE00", markersize=3.5, label=self._legend_labels[1]), 
@@ -320,4 +359,25 @@ class Finetwork():
 
 
 if __name__ == "__main__":
-    pass
+    import os
+    import tyrant as tt
+
+    PATH = os.getcwd()
+
+    # load bank data,like:
+    path_bank_specific_data = PATH + '/bank_specific_data(2010, 6, 30).csv'
+    data = Data(path_bank_specific_data)
+    # create a financial network
+    fn = tt.Finetwork(data)
+    # create the initial shock, like:
+    h_i_shock = tt.creating_initial_shock(data.N(), [1, 2], 0.01)
+    fn.draw(method='nldr', alpha=0.01, h_i_shock=h_i_shock)
+    fn.draw(method='dr', h_i_shock=h_i_shock)
+    fn.draw(method='dc')
+    # states
+    fn.stats()
+    # or add h_i_shock to data in advance
+    fn.draw(method='nldr', alpha=0.01)
+    fn.draw(method='dr')
+    fn.draw(method='dr', is_savefig=True)
+    fn.draw()
