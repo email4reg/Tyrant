@@ -166,9 +166,6 @@ class Data:
 
     def filein_bank_specific_data(self):
         return self._filein_bank_specific_data
-
-    def get_h_i_shock(self):
-        return self.h_i_shock
     
     def getExposures(self,data='wide'):
         if data == 'wide':

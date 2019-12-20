@@ -20,23 +20,19 @@ from tyrant.debtrank import DebtRank, NonLinearDebtRank
 
 
 class Finetwork():
-    """
-    Construct a Direct Graph based on the following parameters
+    """Construct a Direct Graph based on the following parameters.
 
     Parameters:
     ---
-    `data`: tyrant.debtrank.Data
+    `data`: <tyrant.debtrank.Data>.
         All data required. see detail in tyrant.network.Data.
-    ---
-    `G`: nx.Graph or nx.DiGraph
+    
+    `G`: <nx.Graph or nx.DiGraph>.
         see detail in networkx
-    ---   
-    `is_remove`: bool
+       
+    `is_remove`: <True>.
         Remove all edges equal to 0. Default is True.
-    ---
-    Return:
-    ---
-        network
+    
     """
     def __init__(self, data, G=None, is_remove=True):
         assert isinstance(data, Data), "ERROR: data must be a <Data>"
@@ -59,7 +55,7 @@ class Finetwork():
         
         self._nodes = self._FN.nodes()
         self._edges = self._FN.edges()
-
+        
         # remove weight=0
         if is_remove:
             self._FN = self._remove_0_weight()
@@ -73,9 +69,9 @@ class Finetwork():
         # TODO: the weight of a directed network(defult = the loan amount)
 
         # create a draw paramters
-        attr_nodes = [self._FN.nodes[node]['assets'] for node in self._FN]
-        attr_edges = [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]
-        self._draw_params(attr_nodes, attr_edges)
+        node_assets = [self._FN.nodes[node]['assets'] for node in self._FN]
+        edge_weight = [self._FN.edges[i, j]['weight'] for i, j in self._FN.edges]
+        self._draw_params(node_assets, edge_weight)
         
     def __str__(self):
         return self._data._label_net + ' on ' + self._data._label_year
@@ -99,13 +95,13 @@ class Finetwork():
         x_max = np.max(x)
         return list(map(lambda x: y_min + ((y_max - y_min) / (x_max - x_min)) * (x - x_min), x))
 
-    def _draw_params(self,attr_nodes,attr_edges):
+    def _draw_params(self,node_assets,edge_weight):
         ## the size of nodes
-        self._node_assets = self._scale(attr_nodes, y_min=150, y_max=600)
+        self._node_assets = self._scale(node_assets, y_min=150, y_max=600)
         ## the colour of nodes
 
         ## the width and colour of edges
-        self._edge_weights = self._scale(attr_edges, y_min=0.01, y_max=1)
+        self._edge_color = self._scale(edge_weight, y_min=0.01, y_max=1)
     
     def _run_centrality(self, **kwargs):
         # compute centrality
@@ -122,16 +118,8 @@ class Finetwork():
                 pass
             # get the values of debtrank of nodes and rank by First-Third quantile
             self._node_centrality = nldr.h_i()
-        elif kwargs['method'] == 'dc':
-            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
-        elif kwargs['method'] == 'bc':
-            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
-        elif kwargs['method'] == 'cc':
-            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
-        elif kwargs['method'] == 'kc':
-            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
         else:
-            pass
+            self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
         
         q1, q2, q3 = np.percentile(self._node_centrality, [25, 50, 75])
         # create the four kinds of colour of nodes
@@ -145,7 +133,7 @@ class Finetwork():
                 nodes_color.append('#EE9A00')
             else:
                 nodes_color.append('#EE0000')
-        return nodes_color
+        return {'centrality': self._node_centrality, 'node color': nodes_color}
     
     def nodes(self):
         return list(self._nodes)
@@ -153,16 +141,49 @@ class Finetwork():
     def edges(self):
         return list(self._edges)
     
-    def draw(self, method='', h_i_shock=None, alpha=None, t_max=100, is_savefig=False, font_size=5, node_color='b', **kwargs):
+    def draw(self, method='', h_i_shock=None, alpha=None, max_iter=100, is_savefig=False, font_size=5, node_color='b', seed=None, **kwargs):
+        """draw financial network.
+
+        Paramaters:
+        ---
+        `method`: <str>.
+            the optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr','dc',...}. Default = 'dr'.
+        
+        `h_i_shock`: <np.ndarray>. 
+            the initial shock. see `tt.creating_initial_shock()`.
+
+        `alpha`: <float>.
+            optional, the parameter of Non-Linear DebtRank. Default = 0.
+
+        `t_max`: <int>. 
+            the max number of iteration. Default = 100.
+
+        `is_savefig`: <False>. 
+            optional, if True, it will be saved to the current work environment. otherwise, plt.show().
+
+        `font_size`: <int>. 
+            the size of the labels of nodes. Default = 5.  
+
+        `node_color`: <str or RGB>.
+            the color of nodes. if method is not empty, the colors reflect the importance level.  
+
+        `**kwargs`: 
+            customize your figure, see detail in networkx.draw.
+        """
         # initial setting
         title = 'The ' + self._data._label_net + '(%s)' % self._data._label_year
         method = str(method)
         debtrank_alias = {'dr': 'debtrank','nldr': 'nonlinear debtrank'}
         centrality_alias = {
+                            'idc': 'in-degree centrality',
+                            'odc': 'out-degree centrality',
                             'dc': 'degree centrality',
                             'bc': 'betweenness centrality',
-                            'cc': 'closeness centrality',
-                            'kc': 'katz centrality'
+                            'cc': 'closeness(in) centrality',
+                            'occ': 'out-closeness centrality',
+                            'ec': 'eigenvector(in) centrality',
+                            'oec': 'out-eigenvector centrality',
+                            'kc': 'katz centrality',
                             }
         # method
         if method in debtrank_alias:
@@ -174,8 +195,8 @@ class Finetwork():
             else:
                 self._h_i_shock = h_i_shock
             
-            assert isinstance(self._h_i_shock,(list,np.ndarray)), "ERROR: 'h_i_shock' should be provided(i.e. <list> or <np.ndarray>)."
-            assert len(self._h_i_shock) == self._data._N, "ERROR: the length of provided 'h_i_shock' is not equal to data."
+            assert isinstance(self._h_i_shock,(list,np.ndarray)), "ERROR: the 'h_i_shock' you provided should be a list or np.ndarray."
+            assert len(self._h_i_shock) == self._data._N, "ERROR: the length of 'h_i_shock' you provided is not equal to data."
 
             # the node labels
             self._node_labels = {}
@@ -190,7 +211,7 @@ class Finetwork():
                 # the legend labels
                 self._legend_labels = ['debtrank < 25%', 'debtrank > 25%','debtrank > 50%','debtrank > 75%']
                 # the color of nodes
-                self._nodes_color = self._run_centrality(method = 'dr', h_i_shock=self._h_i_shock, t_max=t_max)
+                self._nodes_color = self._run_centrality(method = 'dr', h_i_shock=self._h_i_shock, t_max=max_iter)['node color']
             elif method == 'nldr':
                 if alpha is None:
                     alpha = 0
@@ -198,10 +219,9 @@ class Finetwork():
                 # rename figure title
                 title = 'The ' + self._data._label_net + ', ' + r'$\alpha = %.2f$' % alpha + ' (%s)' % self._data._label_year 
                 # the legend labels
-                self._legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%',
-                                    'nonlinear debtrank > 50%', 'nonlinear debtrank > 75%']
+                self._legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%', 'nonlinear debtrank > 50%', 'nonlinear debtrank > 75%']
                 # the color of nodes
-                self._nodes_color = self._run_centrality(method='nldr', h_i_shock=self._h_i_shock, alpha=alpha, t_max=t_max)
+                self._nodes_color = self._run_centrality(method='nldr', h_i_shock=self._h_i_shock, alpha=alpha, t_max=max_iter)['node color']
             else:
                 pass # TODO
 
@@ -218,38 +238,79 @@ class Finetwork():
             # the node labels
             self._node_labels = dict(zip(self._nodes, self._nodes))
             # 'dc'
-            if method == 'dc':
+            if method == 'idc':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['in-degree centrality < 25%', 'in-degree centrality > 25%',
+                                       'in-degree centrality > 50%', 'in-degree centrality > 75%']
+                # the color of nodes
+                self._in_degree_centrality = ct.in_degree_centrality(self._FN)
+                self._nodes_color = self._run_centrality(method='idc', centrality=self._in_degree_centrality)['node color']
+            elif method == 'odc':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['out-degree centrality < 25%', 'out-degree centrality > 25%',
+                                       'out-degree centrality > 50%', 'out-degree centrality > 75%']
+                # the color of nodes
+                self._out_degree_centrality = ct.out_degree_centrality(self._FN)
+                self._nodes_color = self._run_centrality(method='odc', centrality=self._out_degree_centrality)['node color']
+            elif method == 'dc':
                 # dict: dictionary. see detail in centrality.
                 # the legend labels
                 self._legend_labels = ['degree centrality < 25%', 'degree centrality > 25%',
-                                    'degree centrality > 50%', 'degree centrality > 75%']
+                                       'degree centrality > 50%', 'degree centrality > 75%']
                 # the color of nodes
                 self._degree_centrality = ct.degree_centrality(self._FN)
-                self._nodes_color = self._run_centrality(method='dc', centrality=self._degree_centrality)
+                self._nodes_color = self._run_centrality(method='dc', centrality=self._degree_centrality)['node color']
             elif method == 'bc':
                 # dict: dictionary. see detail in centrality.
                 # the legend labels
                 self._legend_labels = ['betweenness centrality < 25%', 'betweenness centrality > 25%',
                                        'betweenness centrality > 50%', 'betweenness centrality > 75%']
                 # the color of nodes
-                self._betweenness_centrality = ct.betweenness_centrality(self._FN, k=kwargs['k'])
-                self._nodes_color = self._run_centrality(method='bc', centrality=self._betweenness_centrality)
-            elif method == 'cc':
+                self._betweenness_centrality = ct.betweenness_centrality(self._FN, weight='weight', seed=seed)
+                self._nodes_color = self._run_centrality(method='bc', centrality=self._betweenness_centrality)['node color']
+            elif method == 'cc' or method == 'icc':
                 # dict: dictionary. see detail in centrality.
                 # the legend labels
-                self._legend_labels = ['closeness centrality < 25%', 'closeness centrality > 25%',
-                                       'closeness centrality > 50%', 'closeness centrality > 75%']
+                self._legend_labels = ['in-closeness centrality < 25%', 'in-closeness centrality > 25%',
+                                       'in-closeness centrality > 50%', 'in-closeness centrality > 75%']
                 # the color of nodes
-                self._closeness_centrality = ct.closeness_centrality(self._FN, u=kwargs['u'])
-                self._nodes_color = self._run_centrality(method='cc', centrality=self._closeness_centrality)
-            elif method == 'kc':
+                self._in_closeness_centrality = ct.closeness_centrality(self._FN, distance='weight')
+                self._nodes_color = self._run_centrality(method='cc', centrality=self._in_closeness_centrality)['node color']
+            elif method == 'occ':
                 # dict: dictionary. see detail in centrality.
                 # the legend labels
-                self._legend_labels = ['closeness centrality < 25%', 'closeness centrality > 25%',
-                                       'closeness centrality > 50%', 'closeness centrality > 75%']
+                self._legend_labels = ['out-closeness centrality < 25%', 'out-closeness centrality > 25%',
+                                       'out-closeness centrality > 50%', 'out-closeness centrality > 75%']
                 # the color of nodes
-                self._katz_centrality = ct.katz_centrality(self._FN, alpha=kwargs['u'])
-                self._nodes_color = self._run_centrality(method='kc', centrality=self._katz_centrality)
+                self._out_closeness_centrality = ct.closeness_centrality(self._FN.reverse(), distance='weight')
+                self._nodes_color = self._run_centrality(method='occ', centrality=self._out_closeness_centrality)['node color']
+            elif method == 'ec' or method == 'iec':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['in-eigenvector centrality < 25%', 'in-eigenvector centrality > 25%',
+                                       'in-eigenvector centrality > 50%', 'in-eigenvector centrality > 75%']
+                # the color of nodes
+                self._in_eigenvector_centrality = ct.eigenvector_centrality(self._FN, max_iter=max_iter, weight='weight')
+                self._nodes_color = self._run_centrality(method='ec', centrality=self._in_eigenvector_centrality)['node color']
+            elif method == 'oec':
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['out-eigenvector centrality < 25%', 'out-eigenvector centrality > 25%',
+                                       'out-eigenvector centrality > 50%', 'out-eigenvector centrality > 75%']
+                # the color of nodes
+                self._out_eigenvector_centrality = ct.eigenvector_centrality(self._FN.reverse(), max_iter=max_iter, weight='weight')
+                self._nodes_color = self._run_centrality(method='oec', centrality=self._out_eigenvector_centrality)['node color']
+            elif method == 'kc': # bug
+                # dict: dictionary. see detail in centrality.
+                # the legend labels
+                self._legend_labels = ['katz centrality < 25%', 'katz centrality > 25%',
+                                       'katz centrality > 50%', 'katz centrality > 75%']
+                # the color of nodes
+                phi, _ = np.linalg.eig(self._Ad_ij)
+                self._katz_centrality = ct.katz_centrality(self._FN, alpha=1/np.max(phi) - 0.01, weight='weight')
+                self._nodes_color = self._run_centrality(method='kc', centrality=self._katz_centrality)['node color']
             else:
                 pass # TODO
 
@@ -270,7 +331,7 @@ class Finetwork():
         # draw
         draw_default = {'node_size': self._node_assets,
                         'node_color': self._nodes_color,
-                       'edge_color': self._edge_weights,
+                       'edge_color': self._edge_color,
                        'edge_cmap': plt.cm.binary,
                         'labels': self._node_labels,
                         'width': 0.8,
@@ -319,43 +380,63 @@ class Finetwork():
     ## Generate a series of basic stats for the network
     def stats(self):
 #       include: number nodes; number edges; density; conectively       
-        nNodes, nEdges = self._FN.order(), self._FN.size()
-        avg_deg = float(nEdges) / nNodes
-        
-        # nb os strongly and weakly connected nodes
-        scc = nx.number_strongly_connected_components(self._FN)
-        wcc = nx.number_weakly_connected_components(self._FN)
-        
-        inDegree = self._FN.in_degree()
-        outDegree = self._FN.out_degree()
-        avgInDegree = np.mean(list(zip(*inDegree))[1])
-        avgOutnDegree = np.mean(list(zip(*outDegree))[1])
+        num_nodes = self._FN.order()
+        num_edges = self._FN.size()
         density = nx.density(self._FN)
-
+        node_connectivity = nx.node_connectivity(self._FN)
+        
         stats = {}
         
-        stats['nbNodes'] = np.round(nNodes, 0)
-        stats['nbEdges'] = np.round(nEdges, 0)
-        stats['avg_deg'] = np.round(avg_deg, 2)
-        stats['stronglyConnectedComponents'] = np.round(scc, 0)
-        stats['weaklyConnectedComponents'] = np.round(wcc, 0)
-        stats['avgInDegree'] = np.round(avgInDegree, 2)
-        stats['avgOutnDegree'] = np.round(avgOutnDegree, 2)
+        stats['nodes'] = np.round(num_nodes, 0)
+        stats['edges'] = np.round(num_edges, 0)
         stats['density'] = np.round(density, 2)
+        stats['connectivity'] = np.round(node_connectivity, 0)
         
-        return pd.Series(stats,name='stats')
+        return pd.Series(stats,name='network stats')
 
-    def centrality(self):
-#       include: degree centrality,
+    def centrality(self, h_i_shock=None, alpha=0.0, rank=False, seed=123, max_iter=100, **kwargs):
+#       include: degree centrality,...
+        cdntrality_index = ['in-degree centrality', 'out-degree centrality', 'degree centrality', 'betweenness centrality',
+                            'in-closeness centrality', 'out-closeness centrality', 'in-eigenvector centrality', 'out-eigenvector centrality', 'debtrank', 'non-linear debtrank']
+
+        # the greater the value, the more important
+        self._in_degree_centrality = ct.in_degree_centrality(self._FN)
+        # reflect the enthusiasm of banks
+        self._out_degree_centrality = ct.out_degree_centrality(self._FN)
+        # the greater the value, the more important
         self._degree_centrality = ct.degree_centrality(self._FN)
-        self._betweenness_centrality = ct.betweenness_centrality(self._FN)
-        self._closeness_centrality = ct.closeness_centrality(self._FN)
-        self._katz_centrality = ct.katz_centrality(self._FN)
-
-        network_centrality = list(
-            self._degree_centrality, self._betweenness_centrality, self._closeness_centrality, self._katz_centrality)
+        # the greater the value, the more important
+        self._betweenness_centrality = ct.betweenness_centrality(self._FN, weight='weight',seed=seed)
+        # integration
+        self._in_closeness_centrality = ct.closeness_centrality(self._FN, distance='weight')
+        # radiality
+        self._out_closeness_centrality = ct.closeness_centrality(self._FN.reverse(), distance='weight')
+        # # the greater the value, the more important, Similar to PageRank
+        self._in_eigenvector_centrality = ct.eigenvector_centrality(self._FN, max_iter=max_iter, weight='weight')
+        self._out_eigenvector_centrality = ct.eigenvector_centrality(self._FN.reverse(), max_iter=max_iter, weight='weight')
+        # self._katz_centrality = ct.katz_centrality(self._FN, weight='weight') # bug
         
-        return pd.DataFrame(network_centrality)
+        # debtrank
+        if h_i_shock is None:
+            h_i_shock = self._data.h_i_shock
+        
+        assert isinstance(h_i_shock,(list,np.ndarray)), "ERROR: the 'h_i_shock' you provided should be a list or np.ndarray."
+        assert len(h_i_shock) == self._data._N, "ERROR: the length of 'h_i_shock' you provided is not equal to data."
+        
+        self._debtrank = self._run_centrality(method='dr', h_i_shock=h_i_shock, t_max=max_iter)['centrality']
+        self._debtrank = dict(zip(self._nodes, self._debtrank))
+        self._nonlinear_debtrank = self._run_centrality(method='nldr', h_i_shock=h_i_shock, alpha=alpha, t_max=max_iter)['centrality']
+        self._nonlinear_debtrank = dict(zip(self._nodes, self._nonlinear_debtrank))
+
+        network_centrality = [self._in_degree_centrality, self._out_degree_centrality, self._degree_centrality, self._betweenness_centrality, self._in_closeness_centrality,
+                              self._out_closeness_centrality, self._in_eigenvector_centrality, self._in_eigenvector_centrality, self._debtrank, self._nonlinear_debtrank]
+        df = pd.DataFrame(network_centrality).T
+        df.columns = cdntrality_index
+
+        if rank:
+            df = df.rank(method='min',ascending=False)
+        
+        return df
 
 
 if __name__ == "__main__":
@@ -376,6 +457,7 @@ if __name__ == "__main__":
     fn.draw(method='dc')
     # states
     fn.stats()
+    fn.centrality(alpha=0.05)
     # or add h_i_shock to data in advance
     fn.draw(method='nldr', alpha=0.01)
     fn.draw(method='dr')
