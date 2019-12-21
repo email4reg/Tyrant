@@ -10,13 +10,14 @@ library(igraph)
 library(intergraph)
 
 # clear
-rm(list = ls())
+# rm(list = ls())
+PATH = getwd()
 
 # data("sim_data")
 # head(sim_data)
-data <- read.csv("/Users/hehaoran/Desktop/bankdata/bank_specific_data(2010, 6, 30).csv")
+data <- read.csv(paste(PATH, "/res/bank_specific_data(2010, 6, 30).csv",sep=''))
 
-set.seed(15)
+set.seed(123)
 
 # md_mat <- matrix_estimation(sim_data$assets, sim_data$liabilities, method = "md", verbose = FALSE)
 md_mat <- matrix_estimation(rowsum=data$inter_bank_assets, colsums=data$inter_bank_liabilities, method = "md", verbose = FALSE)
@@ -61,14 +62,11 @@ sim_data$impd <- impact_diffusion(exposures = gmd, buffer = sim_data$buffer, wei
 
 ## Contagion metrics: default cascades and DebtRank
 # DebtRank simulation
-contdr <- contagion(exposures = md_mat, buffer = sim_data$buffer, weights = sim_data$weights, shock = "all", method = "debtrank", verbose = FALSE)
+# s <- seq(0.01,0.25,by=0.01)
+# shocks <- lapply(s, function(x) rep(x, nrow(md_mat)))
+contdr <- contagion(exposures = md_mat, buffer = data$equity, shock='all', single.hit = TRUE, weights = data$total_assets, method = "debtrank", verbose = F)
 summary(contdr)
 plot(contdr)
-
-# interpret these results
-contdr_summary <- summary(contdr)
-sim_data$DebtRank <- contdr_summary$summary_table$additional_stress
-
 
 ## Traditional default cascades simulation
 contthr <-  contagion(exposures = md_mat, buffer = sim_data$buffer, weights = sim_data$weights, 
