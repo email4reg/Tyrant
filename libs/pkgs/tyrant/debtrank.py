@@ -17,13 +17,23 @@ def make_sure_path_exists(path):
         if exception.errno != errno.EEXIST:
             raise
 
-class DebtRank():
+
+class OriginalDebtRank():
     """
-     @param graph: the graph
-     @param SD: set of nodes for which the measure must be calculated
-     @param h: scalar (double) in [0,1] with the initial level of distress (equal for all nodes). 1 is default
-     @param maxIter: maximum number of iterations
-     @param relevance: dictionnary with absolute economic relevance of each node (could be Makt cap or other)
+    Construct a original DebtRank
+
+    Parameters:
+    ---
+    `data`: <Data, optional>
+    >All data required. see tyrant.network.Data.
+    
+    `relevance`: <array-like, optional>
+    >Absolute economic relevance of each node (could be Makt cap or other)
+    note:
+    ---
+    see Battiston S, Puliga M, Kaushik R, Tasca P, Caldarelli G. 
+    DebtRank: too central to fail? Financial networks, the FED and systemic risk[J]. 
+    Scientific Reports, 2012, 2(8): 541.
     """
     def __init__(self, data, relevance):
         assert isinstance(data, Data)
@@ -141,14 +151,14 @@ class NonLinearDebtRank:
 
     Parameters
     -----------
-    data : Data
-        The data needed by the non-linear-DebtRank which is necessary to compute different quantities.
-    h_i_shock : ndarray of floats
-        The initial shock to the banks, i.e. h_i(t=1). Notice, it is assumed that h_i(0)=0 for all i (see comment C1 above).
-    alpha : float
-        The interpolation parameter; alpha = 0.0 corresponds to linear-DebtRank, and alpha = <big number> to "Furfine".
+    `data` : <Data>.
+        The data needed by the non-linear-DebtRank which is necessary to compute different quantities.  
+     note:
+    ---
+    see Bardoscia M, Caccioli F, Perotti J I, Vivaldo G, Caldarelli G. 
+    Distress Propagation in Complex Networks: The Case of Non-Linear DebtRank[J]. 
+    PLOS ONE, 2016, 11(10): e0163825.
     """
-
     def __init__(self, data):
 
         assert isinstance(data, Data)
@@ -189,9 +199,19 @@ class NonLinearDebtRank:
         """It takes h_i(t) and computes p_i(t)"""
         return np.minimum(1.0, h_i * np.exp(self._alpha * (h_i - 1.0)))
 
-    def iterator(self, h_i_shock, alpha, t_max, zeroize_isolated_banks=True, check_stationarity=True):
+    def iterator(self, h_i_shock, alpha, t_max=100, zeroize_isolated_banks=True, check_stationarity=True, verbose=False):
         """This creates an iterator of the system dynamics.
 
+        Parameters:
+        ---
+        `h_i_shock` : <array-like>.
+            The initial shock to the banks, i.e. h_i(t=1). Notice, it is assumed that h_i(0)=0 for all i (see comment C1 above).  
+        
+        `alpha` : <float>.
+            The interpolation parameter; alpha = 0.0 corresponds to linear-DebtRank, and alpha = <big number> to "Furfine".
+        
+        `t_max`: <int>.
+            the max number of iteration. Default = 100.
         """
 
         if check_stationarity:
@@ -246,18 +266,8 @@ class NonLinearDebtRank:
 
             self._t += 1  # t -> t+1
 
-            # Compute h_i(t+1)
-            #
-#            self._h_i += self._Lambda_ij.dot( self._p_i_pres - self._p_i_past )
             dp = self._p_i_pres - self._p_i_past
-#            if ( dp < 0.0 ).sum() > 0:
-#            print '########## t',self._t
-#            print '########## h_i',self._h_i
-#            print '########## PAST',self._p_i_past
-#            print '########## PRES',self._p_i_pres
-#            print '########## DIFF',dp
-#            assert False
-            #
+
             self._h_i += self._Lambda_ij.dot(dp)
             #
             self._h_i = np.minimum(1.0, self._h_i)
@@ -270,8 +280,10 @@ class NonLinearDebtRank:
             if check_stationarity:
                 if np.allclose(self._h_i, self._last_h_i):
                     self._stationarity = True
-                    return
-                self._last_h_i[:] = self._h_i
+                    if verbose:
+                        print("Warning: stationarity t = %s and please ignore it" % self._t)
+                    break
+            self._last_h_i[:] = self._h_i
 
     def h_i(self):
         return self._h_i.copy()
@@ -324,17 +336,22 @@ class InitialShockGenerator:
 
     Parameters
     ----------
-    data : <Data>
+    `data` : <Data>
         The shock generator can use the loaded data to compute the shocks.
-    filein_h_shock : None or <str>
+
+    `filein_h_shock` : None or <str>
         If provided it loads h_i_ini from file "filein_h_shock".
-    filein_x_shock : None or <str>
+    
+    `filein_x_shock` : None or <str>
         If provided it loads x_i from file "filein_x_shock", from where h_i_ini is computed according to the formula h_i(1) := x_i * A_i^{E}(0) / E_i(0). the devaluation of external assets
-    p_i_shock : None or <float>
+    
+    `p_i_shock` : None or <float>
         If provided, a number in [0,1]. It is the probability for each bank to be shocked.(np.random.random() < self._p_i_shock)
-    h_shock : None or <float>
+    
+    `h_shock` : None or <float>
         If provided, a number in [0,1], used to set h_i(1)=h_shock whenever i is a shocked bank according to the use of "p_i_shock".
-    x_shock : None or <float>
+    
+    `x_shock` : None or <float>
         If provided, a number in [0,1], used to set h_i(1)= x_shock * A_i^{E}(0) / E_i(0) whenever i is a shocked bank according to the use of "p_i_shock".
     """
     def __init__(self,data,filein_h_shock=None,filein_x_shock=None,p_i_shock=None,h_shock=None,x_shock=None):
@@ -427,7 +444,7 @@ class SmartExperimenter:
     ----------
     rho: <str> or <float>
         The value in [0,1], and the same as R_ij on <Data>.
-    p_shock: <str> or <float>
+    p_i_shock: <str> or <float>
         The probability for each bank to be shocked, the same as p_i_shock on <InitialShockGenerator>.
     x_shock: <str> or <float>
         a factor of the devaluation of external assets. See <InitialShockGenerator> in detail
@@ -453,22 +470,22 @@ class SmartExperimenter:
             for line in fh.readlines():
                 if '#' in line:
                     continue
-                # 1.rho 2.p_shock 3.x_shock 4.alpha
+                # 1.rho 2.p_i_shock 3.x_shock 4.alpha
                 cols=line.split()
-                rho,p_shock,x_shock,alpha=cols
+                rho,p_i_shock,x_shock,alpha=cols
                 rho=float(rho)
-                p_shock=float(p_shock)
+                p_i_shock=float(p_i_shock)
                 x_shock=float(x_shock)
                 alpha=float(alpha)
                 assert rho >= 0.0
-                assert p_shock > 0.0 and p_shock <= 1.0
+                assert p_i_shock > 0.0 and p_i_shock <= 1.0
                 assert x_shock > 0.0
                 assert alpha >= 0.0
-                self._parameter_space.append( (rho,p_shock,x_shock,alpha) )
+                self._parameter_space.append( (rho,p_i_shock,x_shock,alpha) )
     
     def rho_ith_experiment(self,i):
         return self._parameter_space[i][0]
-    def p_shock_ith_experiment(self,i):
+    def p_i_shock_ith_experiment(self,i):
         return self._parameter_space[i][1]
     def x_shock_ith_experiment(self,i):
         return self._parameter_space[i][2]
@@ -483,24 +500,24 @@ class SmartExperimenter:
         p=self._data.label_p()
         net=self._data.label_net()
 
-        rho,p_shock,x_shock,alpha = self._parameter_space[i]
+        rho,p_i_shock,x_shock,alpha = self._parameter_space[i]
         t_max = self._t_max
 
         Lshock="x_shock"
         Vshock=str(x_shock)
         #
-        OUTDIR=self._baseoutdir+"/year"+str(year)+"/p"+str(p)+"/p_i_shock"+str(p_shock)+"/"+Lshock+Vshock+"/"
+        OUTDIR=self._baseoutdir+"/year"+str(year)+"/p"+str(p)+"/p_i_shock"+str(p_i_shock)+"/"+Lshock+Vshock+"/"
         make_sure_path_exists(OUTDIR)
         #
         execname='nonlinear_debt_rank_v4'
-        fileout=OUTDIR+execname+"_p"+str(p)+"_year"+str(year)+"_net"+str(net)+"_rho"+str(rho)+"_alpha"+str(alpha)+"_p_i_shock"+str(p_shock)+"_h_shockNone"+"_x_shock"+str(x_shock)+".txt"
+        fileout=OUTDIR+execname+"_p"+str(p)+"_year"+str(year)+"_net"+str(net)+"_rho"+str(rho)+"_alpha"+str(alpha)+"_p_i_shock"+str(p_i_shock)+"_h_shockNone"+"_x_shock"+str(x_shock)+".txt"
         with open(fileout,'w') as fhw:
 
             print('# year',year,file=fhw)
             print('# net',net,file=fhw)
             print('# p',p,file=fhw)
             print('# rho',rho,file=fhw)
-            print('# p_i_shock',p_shock,file=fhw)
+            print('# p_i_shock',p_i_shock,file=fhw)
             print('# h_shock',None,file=fhw)
             print('# x_shock',x_shock,file=fhw)
             print('# alpha',alpha,file=fhw)
@@ -511,7 +528,7 @@ class SmartExperimenter:
             print('# seed',self._seed,file=fhw)
 
             print('# Creating the Initial Shock Generator...',file=fhw)
-            isg = InitialShockGenerator(self._data,p_i_shock=p_shock,x_shock=x_shock) # Here: p_shock = p_i_shock
+            isg = InitialShockGenerator(self._data,p_i_shock=p_i_shock,x_shock=x_shock)
 
             print('# Creating the Non-Linear Debt-Rank...',file=fhw)
             nldr=NonLinearDebtRank(self._data)

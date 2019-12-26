@@ -5,7 +5,7 @@ from dateutil.parser import parse
 import numpy as np
 import pandas as pd
 import os
-# for the error class <Finetwork.draw>
+# warning: don't delete it or a bug in <Finetwork.draw>
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 # figure
@@ -16,7 +16,7 @@ from matplotlib.lines import Line2D
 
 ##
 from tyrant import Data
-from tyrant.debtrank import DebtRank, NonLinearDebtRank
+from tyrant.debtrank import OriginalDebtRank, NonLinearDebtRank
 
 
 class Finetwork():
@@ -42,7 +42,7 @@ class Finetwork():
         assert self._data.N() == len(self._Ad_ij), "ERROR: the length of data is not equal to Ad_ij"
         
         # remove isolated banks
-        self._Ad_ij = self._remove_isolated_banks()
+        self._Ad_ij, self._isolated_banks = self._remove_isolated_banks()
         
         if G is None:
             # create a direct graph
@@ -59,14 +59,15 @@ class Finetwork():
         # remove weight=0
         if is_remove:
             self._FN = self._remove_0_weight()
+        
+        # add the attribute to nodes(i.e assets)
+        for i, j in zip(self._data._bank_name_i, self._data.A_i()):
+            if i not in self._isolated_banks:
+                self._FN.nodes[i]['assets'] = j
+        # TODO: the weight of a directed network(defult = the loan amount)
 
         self._nodes = self._FN.nodes()
         self._edges = self._FN.edges()
-
-        # add the attribute to nodes(i.e assets)
-        for i, j in zip(self._data._bank_name_i, self._data.A_i()):
-            self._FN.nodes[i]['assets'] = j
-        # TODO: the weight of a directed network(defult = the loan amount)
 
         # create a draw paramters
         node_assets = [self._FN.nodes[node]['assets'] for node in self._FN]
@@ -76,13 +77,18 @@ class Finetwork():
     def __str__(self):
         return self._data._label_net + ' on ' + self._data._label_year
     
+    def __eq__(self, other):
+        return nx.graph_edit_distance(self.getFN(),other.getFN()) # TODO
+    
     def _remove_isolated_banks(self):
+        isolated_banks = []
         for i in self._Ad_ij.index:
             if self._Ad_ij.loc[i, :].sum() == 0.0 and self._Ad_ij.loc[:, i].sum() == 0.0:
                 self._Ad_ij.drop(i, axis=0, inplace=True)
                 self._Ad_ij.drop(i, axis=1, inplace=True)
+                isolated_banks.append(i)
                 print("Warning: %s was removed!" % i)
-        return self._Ad_ij
+        return self._Ad_ij, isolated_banks
 
     def _remove_0_weight(self):          
         weight_0 = [(u, v) for (u, v) in self._edges if not self._FN.edges[u, v]['weight']]
@@ -107,7 +113,7 @@ class Finetwork():
         # compute centrality
         # run DebtRank algorithm
         if kwargs['method'] == 'dr':
-            dr = DebtRank(self._data, self._data.A_i())
+            dr = OriginalDebtRank(self._data, self._data.A_i())
             for _ in dr.iterator(h_i_shock=kwargs['h_i_shock'],t_max=kwargs['t_max']):
                 pass
             # get the values of debtrank of nodes and rank by First-Third quantile
@@ -144,7 +150,7 @@ class Finetwork():
     def draw(self, method='', h_i_shock=None, alpha=None, max_iter=100, is_savefig=False, font_size=5, node_color='b', seed=None, **kwargs):
         """draw financial network.
 
-        Paramaters:
+        Parameters:
         ---
         `method`: <str>.
             the optional, the color of nodes map to the important level of bank. i.e. {'dr','nldr','dc',...}. Default = 'dr'.
@@ -379,23 +385,25 @@ class Finetwork():
     
     ## Generate a series of basic stats for the network
     def stats(self):
-#       include: number nodes; number edges; density; conectively       
+        #       include: number nodes; number edges; density; conectively; assortativity
         num_nodes = self._FN.order()
         num_edges = self._FN.size()
         density = nx.density(self._FN)
-        node_connectivity = nx.node_connectivity(self._FN)
+        connectivity = nx.node_connectivity(self._FN)
+        assortativity = nx.degree_pearson_correlation_coefficient(self._FN, x='out', y='in', weight='weight')
         
         stats = {}
         
         stats['nodes'] = np.round(num_nodes, 0)
         stats['edges'] = np.round(num_edges, 0)
         stats['density'] = np.round(density, 2)
-        stats['connectivity'] = np.round(node_connectivity, 0)
+        stats['connectivity'] = np.round(connectivity, 0)
+        stats['assortativity'] = np.round(assortativity, 2)
         
-        return pd.Series(stats,name='network stats')
+        return pd.Series(stats,name='stats')
 
     def centrality(self, h_i_shock=None, alpha=0.0, rank=False, seed=123, max_iter=100, **kwargs):
-#       include: degree centrality,...
+    #       include: degree centrality,...
         cdntrality_index = ['in-degree centrality', 'out-degree centrality', 'degree centrality', 'betweenness centrality',
                             'in-closeness centrality', 'out-closeness centrality', 'in-eigenvector centrality', 'out-eigenvector centrality', 'debtrank', 'non-linear debtrank']
 
