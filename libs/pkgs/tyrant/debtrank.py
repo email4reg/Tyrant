@@ -28,7 +28,7 @@ class OriginalDebtRank():
     >All data required. see tyrant.network.Data.
     
     `relevance`: <array-like, optional>
-    >Absolute economic relevance of each node (could be Makt cap or other)
+    >Absolute economic relevance of each node (could be Market cap or other)
     note:
     ---
     see Battiston S, Puliga M, Kaushik R, Tasca P, Caldarelli G. 
@@ -101,7 +101,7 @@ class OriginalDebtRank():
             if check_stationarity:
                 if np.allclose(self._h_i, self._last_h_i):
                     self._stationarity = True
-                    continue
+                    break
                 self._last_h_i[:] = self._h_i
 
     def h_i(self):
@@ -142,7 +142,6 @@ class OriginalDebtRank():
     # excluding the initial distress
     def R(self, h_i_shock):
         return np.sum(self.R_i() - self.R0(h_i_shock))
-
 
 
 class NonLinearDebtRank:
@@ -256,11 +255,9 @@ class NonLinearDebtRank:
         if check_stationarity:
             if np.allclose(self._h_i, self._last_h_i):
                 self._stationarity = True
-                return
             self._last_h_i[:] = self._h_i
 
         # STEPS t=2,3,...,t_max
-
         # Previously, there was a minor bug here. It used to stops at t_max+1 instead of t_max.
         while self._t < self._t_max:
 

@@ -36,6 +36,9 @@ def creating_initial_shock(n, node_num, shock):
         for j in shock:
             assert j <= 1 and j >= 0, message[0]
         nodes_shock = dict(zip(node_num,shock))
+    elif node_num == 'all':
+        shock = [shock for _ in range(n)]
+        nodes_shock = dict(zip(list(range(n)), shock))
     else:
         raise Exception("ERROR: node_num and shock should be a int, float or list", TypeError)
     
@@ -56,14 +59,18 @@ class Data:
     where IB means Inter-Bank and EX means External. 
     All these quantities correspond to the time t=0; 
     i.e. immediately before the shock which occurs at time t=1.
+    Parameters:
+    ---
+    `p`: <float>
+        connectivity, the number of edges.
     """
 
-    def __init__(self, filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', p='', net='', r_seed=123):
+    def __init__(self, filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', r_seed=123):
 
         # the network label
         self._label_year = parse(year).strftime("%Y-%m-%d")
-        self._label_p=str(p)
-        self._label_net=str(net)
+        # self._label_p=str(p)
+        # self._label_net=str(net)
         #
         self._filein_bank_specific_data=str(filein_bank_specific_data)
         # The initial shock to the banks
@@ -80,6 +87,15 @@ class Data:
         self._IB_L_i = df_bank_specific_data['inter_bank_liabilities'].values
         self._bank_name_i = list(df_bank_specific_data['bank_name'].values)
 
+        # normalization
+        total_interbank_assets = np.sum(self._IB_A_i)
+        total_interbank_liabilities = np.sum(self._IB_L_i)
+
+        if total_interbank_assets != total_interbank_liabilities:
+            print("Warning: the interbank assets is not equal to the interbank liabilities, and then normalize")
+            self._norm_IB_A_i = self._IB_A_i / total_interbank_assets
+            self._norm_IB_L_i = self._IB_L_i / total_interbank_liabilities
+
         if clipneg:
             self._A_i.clip(0.,None)
             self._E_i.clip(0.,None)
@@ -95,7 +111,7 @@ class Data:
 #         1       4       7180905.941936611
         nrm = importr("NetworkRiskMeasures")
         self._A_ij = np.zeros((self._N, self._N), dtype=np.double)
-
+        
         r('set.seed(%s)' % r_seed)
         print('Estimating the exposure matrix....')
         md_mat = nrm.matrix_estimation(FloatVector(self._IB_A_i), FloatVector(self._IB_L_i), method='md', verbose='F')
@@ -104,7 +120,7 @@ class Data:
 
         # df_edges = pd.read_csv(filein_A_ij)
         for _,i,j,w in self._df_edges[1].itertuples():
-            ii = int(i - 1) # here is a bug, must convert to <int>
+            ii = int(i - 1) # bug, must convert to <int>
             jj = int(j - 1)
             assert ii >= 0 and ii < self._N
             assert jj >= 0 and jj < self._N
@@ -116,22 +132,20 @@ class Data:
 
 #        print '# Creating R_ij...'
         if R_ij is None:
-            self._R_ij = np.zeros( (self._N,self._N) , dtype=np.double )
+            self._R_ij = np.zeros((self._N,self._N), dtype=np.double)
         else:
             try:
                 rho=float(R_ij)
-                self._R_ij = np.ndarray( (self._N,self._N) , dtype=np.double )
+                self._R_ij = np.ndarray((self._N,self._N), dtype=np.double)
                 self._R_ij[:,:]=rho
             except:
-                self._R_ij = np.ndarray( R_ij , dtype=np.double )
-                assert self._R_ij.shape == ( self._N, self._N )
+                self._R_ij = np.ndarray(R_ij, dtype=np.double)
+                assert self._R_ij.shape == (self._N, self._N)
 
 #        print '# Creating Lambda_ij...'
-
-        self._Lambda_ij=np.zeros( (self._N,self._N) , dtype=np.double )
+        self._Lambda_ij=np.zeros((self._N,self._N), dtype=np.double)
         for i in range(self._N):
             for j in range(self._N):
-
                 if clipneg:
                     if self._E_i[i] > 0.0 and self._A_ij[i,j] > 0.0:
                         tmp = self._A_ij[i,j]*(1.0-self._R_ij[i,j])/self._E_i[i]
@@ -140,7 +154,6 @@ class Data:
                     assert tmp >= 0.0
                 else:
                     tmp = self._A_ij[i,j]*(1.0-self._R_ij[i,j])/self._E_i[i]
-
                 self._Lambda_ij[i,j] = tmp
 
         if checks:
@@ -155,25 +168,16 @@ class Data:
     
     def label_year(self):
         return self._label_year
-
-    def label_p(self):
-        return self._label_p
-    def label_net(self):
-        return self._label_net
-
-    def filein_A_ij(self):
-        return self._filein_A_ij
-
-    def filein_bank_specific_data(self):
-        return self._filein_bank_specific_data
+    # def label_p(self):
+    #     return self._label_p
+    # def label_net(self):
+    #     return self._label_net
     
     def getExposures(self,data='wide'):
         if data == 'wide':
             return self._df_edges[0].copy()
         else:
             return self._df_edges[1].copy()
-
-    ###
 
     def N(self):
         return self._N
@@ -195,8 +199,6 @@ class Data:
 
     def bank_name_i(self):
         return self._bank_name_i.copy()
-
-    ###
 
     def Lambda_ij(self):
         return self._Lambda_ij.copy()
