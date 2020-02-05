@@ -164,6 +164,7 @@ class NonLinearDebtRank:
         self._data = data
         self._N = self._data.N()
         self._Lambda_ij = self._data.Lambda_ij()
+        self._EX_A_i = self._data.EX_A_i()
 
         self._h_i = np.zeros(self._N, dtype=np.double)
         # This represents p_i(t-1)
@@ -305,9 +306,27 @@ class NonLinearDebtRank:
 
     def num_stressed(self):
         return ((self._h_i > 0.0) & (self._h_i < 1.0)).sum()
+    
+    # calculate Systemically important financial institutions(SIFIs)
+    # calculate loss matrix
+    def Loss_matrix(self, t):
+        _temp_a = np.linalg.inv(np.identity(self._N) - self._Lambda_ij)
+        _temp_b = np.identity(self._N) - pow(self._Lambda_ij, t)
+        return np.dot(_temp_a, _temp_b)
 
-    def H_i(self):
-        """This returns the total relative equity loss at time t, defined as
+    def L_i(self, t, x_shock):
+        self._L_i = np.zeros(self._N)
+        self._loss_matrix = self.Loss_matrix(t)
+        for i in range(self._N):
+            self._L_i[i] = x_shock * self._EX_A_i[i] * np.sum(self._loss_matrix[i,:])
+        return self._L_i / np.sum(self._L_i)
+
+    # calculate systemically vulnerable financial institutions(SVFIs)
+    def H(self):
+        """
+        the systematic vulnerability
+        ---
+        This returns the total relative equity loss at time t, defined as
 
             H(t) = sum_i H_i(t)
 
@@ -318,10 +337,15 @@ class NonLinearDebtRank:
         _E_i = self._data.E_i()
         sum_E_i = _E_i.sum()
         _H_i = self._h_i * _E_i / sum_E_i
-        return _H_i
+        return np.sum(_H_i)
 
-    def H(self):
-        return self.H_i().sum()
+    def H_i(self):
+        """
+        the systematic vulnerability of bank i.
+        """
+        sum_h_i = self._h_i.sum()
+        _H_i = self._h_i / sum_h_i
+        return _H_i
 
     def stationarity(self):
         return self._stationarity
