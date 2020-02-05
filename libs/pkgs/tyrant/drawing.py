@@ -75,7 +75,7 @@ class Finetwork():
         self._draw_params(node_assets, edge_weight)
         
     def __str__(self):
-        return self._data._label_net + ' on ' + self._data._label_year
+        return 'network: ' + self._data._label_year
     
     def __eq__(self, other):
         return nx.graph_edit_distance(self.getFN(),other.getFN()) # TODO
@@ -117,13 +117,16 @@ class Finetwork():
             for _ in dr.iterator(h_i_shock=kwargs['h_i_shock'],t_max=kwargs['t_max']):
                 pass
             # get the values of debtrank of nodes and rank by First-Third quantile
-            self._node_centrality = dr.h_i()
+            self._node_centrality = dr.R_i()
         elif kwargs['method'] == 'nldr':
             nldr = NonLinearDebtRank(self._data)
             for _ in nldr.iterator(h_i_shock=kwargs['h_i_shock'],alpha=kwargs['alpha'], t_max=kwargs['t_max']):
                 pass
             # get the values of debtrank of nodes and rank by First-Third quantile
-            self._node_centrality = nldr.h_i()
+            self._node_centrality = nldr.H_i()
+        elif kwargs['method'] == 'lp':
+            nldr = NonLinearDebtRank(self._data)
+            self._node_centrality = nldr.L_i(t=kwargs['t'],x_shock=kwargs['x_shock'])
         else:
             self._node_centrality = np.array([kwargs['centrality'][k] for k in kwargs['centrality']])
         
@@ -177,9 +180,10 @@ class Finetwork():
             customize your figure, see detail in networkx.draw.
         """
         # initial setting
-        title = 'The ' + self._data._label_net + '(%s)' % self._data._label_year
+        title = 'The interbank network' + '(%s)' % self._data._label_year
         method = str(method)
         debtrank_alias = {'dr': 'debtrank','nldr': 'nonlinear debtrank'}
+        importance_alias = {'lp': 'loss_percentile'}
         centrality_alias = {
                             'idc': 'in-degree centrality',
                             'odc': 'out-degree centrality',
@@ -223,7 +227,7 @@ class Finetwork():
                     alpha = 0
                     print("Warning: the paramater of 'alpha' is essential! Default = %.2f" % alpha)
                 # rename figure title
-                title = 'The ' + self._data._label_net + ', ' + r'$\alpha = %.2f$' % alpha + ' (%s)' % self._data._label_year 
+                title = 'The interbank network, ' + r'$\alpha = %.2f$' % alpha + ' (%s)' % self._data._label_year 
                 # the legend labels
                 self._legend_labels = ['nonlinear debtrank < 25%', 'nonlinear debtrank > 25%', 'nonlinear debtrank > 50%', 'nonlinear debtrank > 75%']
                 # the color of nodes
@@ -239,7 +243,25 @@ class Finetwork():
             Line2D([0], [0], marker='*', markerfacecolor="#000000", color='w', markersize=6.5, label='the initial shock')
             ]
             _ncol = 5
-        
+        elif method in importance_alias:
+            # title 
+            title = r'$x_{shock} = %.2f$' % kwargs['x_shock'] + ', t = %d' % kwargs['t'] + ' (%s)' % self._data._label_year 
+            # the node labels
+            self._node_labels = dict(zip(self._nodes, self._nodes))
+            # 'lp'
+            self._legend_labels = ['importantance level < 25%', 'importantance level > 25 %',
+                                   'importantance level > 50%', 'importantance level > 75%']
+                # the color of nodes
+            self._nodes_color = self._run_centrality(method='lp', t=kwargs['t'], x_shock=kwargs['x_shock'])['node color']
+
+            _legend_elements = [
+            Line2D([0], [0], marker='o', color="#6495ED", markersize=3.5, label=self._legend_labels[0]),
+            Line2D([0], [0], marker='o', color="#EEEE00", markersize=3.5, label=self._legend_labels[1]), 
+            Line2D([0], [0], marker='o', color="#EE9A00", markersize=3.5, label=self._legend_labels[2]),
+            Line2D([0], [0], marker='o', color="#EE0000", markersize=3.5, label=self._legend_labels[3])
+            ]
+            _ncol = 4
+
         elif method in centrality_alias:
             # the node labels
             self._node_labels = dict(zip(self._nodes, self._nodes))
@@ -320,6 +342,7 @@ class Finetwork():
             else:
                 pass # TODO
 
+
             _legend_elements = [
             Line2D([0], [0], marker='o', color="#6495ED", markersize=3.5, label=self._legend_labels[0]),
             Line2D([0], [0], marker='o', color="#EEEE00", markersize=3.5, label=self._legend_labels[1]), 
@@ -369,8 +392,7 @@ class Finetwork():
             plt.legend(handles=_legend_elements, ncol=_ncol, fontsize=font_size - 1, loc='lower center', frameon=False)
         
         if is_savefig:
-            net,date = '',''
-            net = net.join(self._data._label_net.split(' '))
+            net = "interbanknetwork"
             date = parse(self._data._label_year).strftime("%Y%m%d")
             plt.savefig(net + date + '.png', format='png', dpi=400)
             print("save to '%s'" % os.getcwd() + ' and named as %s' % (net + date) + '.png')
