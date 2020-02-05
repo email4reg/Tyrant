@@ -65,7 +65,7 @@ class Data:
         connectivity, the number of edges.
     """
 
-    def __init__(self, filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, clipneg=True, year='', r_seed=123):
+    def __init__(self, filein_bank_specific_data, h_i_shock=None, R_ij=None, checks=True, tol=0.1, clipneg=True, year='', r_seed=123):
 
         # the network label
         self._label_year = parse(year).strftime("%Y-%m-%d")
@@ -87,22 +87,21 @@ class Data:
         self._IB_L_i = df_bank_specific_data['inter_bank_liabilities'].values
         self._bank_name_i = list(df_bank_specific_data['bank_name'].values)
 
+        self._N = len(self._A_i)
         # normalization
         total_interbank_assets = np.sum(self._IB_A_i)
         total_interbank_liabilities = np.sum(self._IB_L_i)
 
         if total_interbank_assets != total_interbank_liabilities:
-            print("Warning: the interbank assets is not equal to the interbank liabilities, and then normalize")
-            self._norm_IB_A_i = self._IB_A_i / total_interbank_assets
-            self._norm_IB_L_i = self._IB_L_i / total_interbank_liabilities
-
+            if checks:
+                print("Warning: the interbank assets is not equal to the interbank liabilities, and resolved")
+                self._IB_L_i = self._IB_L_i + (total_interbank_assets - total_interbank_liabilities) / self._N
+                
         if clipneg:
             self._A_i.clip(0.,None)
             self._E_i.clip(0.,None)
             self._IB_A_i.clip(0.,None)
             self._IB_L_i.clip(0.,None)
-
-        self._N = len(self._A_i)
 
         ## create inner_bank_exposure via above filein_bank_specific_data
 #       source  target  exposure
@@ -113,9 +112,9 @@ class Data:
         self._A_ij = np.zeros((self._N, self._N), dtype=np.double)
         
         r('set.seed(%s)' % r_seed)
-        print('Estimating the exposure matrix....')
+        # print('Estimating the exposure matrix....')
         md_mat = nrm.matrix_estimation(FloatVector(self._IB_A_i), FloatVector(self._IB_L_i), method='md', verbose='F')
-        print('Finished!')
+        # print('Finished!')
         self._df_edges = self._df2exposures(md_mat)
 
         # df_edges = pd.read_csv(filein_A_ij)
@@ -143,7 +142,7 @@ class Data:
                 assert self._R_ij.shape == (self._N, self._N)
 
 #        print '# Creating Lambda_ij...'
-        self._Lambda_ij=np.zeros((self._N,self._N), dtype=np.double)
+        self._Lambda_ij = np.zeros((self._N,self._N), dtype=np.double)
         for i in range(self._N):
             for j in range(self._N):
                 if clipneg:
@@ -158,8 +157,8 @@ class Data:
 
         if checks:
             for i in range(self._N):
-                assert self.IB_A_i()[i] == self.A_ij()[i, :].sum(), "ERROR: the inter_bank_assets should be equal to the sum of lending to others"
-                assert self.IB_L_i()[i] == self.L_ij()[i, :].sum(), "ERROR: the inter_bank_liabilities should be equal to the sum of loaning from others"
+                assert np.abs(self.IB_A_i()[i] - self.A_ij()[i, :].sum()) < tol, "ERROR: the interbank assets should be equal to the sum of lending to others"
+                assert np.abs(self.IB_L_i()[i] - self.L_ij()[i, :].sum()) < tol, "ERROR: the interbank liabilities should be equal to the sum of loaning from others"
 
     def _df2exposures(self,r_mat):
         df = pd.DataFrame(np.array(list(r_mat)).reshape(self._N, self._N).T, columns=self._bank_name_i, index=self._bank_name_i)
@@ -223,4 +222,12 @@ class Data:
 
 
 if __name__ == "__main__":
-    pass
+    import os
+    import tyrant as tt
+    PATH = os.getcwd()
+    path_bank_specific_data = [
+        PATH + '/res/bank_specific_data(2007, 12, 31).csv',
+        PATH + '/res/bank_specific_data(2008, 12, 31).csv',
+        PATH + '/res/bank_specific_data(2009, 12, 31).csv',
+        PATH + '/res/bank_specific_data(2010, 12, 31).csv']
+    data = tt.Data(filein_bank_specific_data=path_bank_specific_data[0],checks=True, year='2007-12-31')
